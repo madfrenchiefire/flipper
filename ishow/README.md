@@ -1,16 +1,53 @@
-# Controlling an iShow 2.3 USB-ILDA box from Python
+# Controlling an iShow 2.3 laser box from Python
 
-The iShow box is a USB-to-ILDA DAC. The PC sends it a stream of laser points,
-and it turns them into the analog X/Y/R/G/B signals on the DB25 ILDA plug.
-Its USB protocol is not published, and its driver doesn't install on Windows 11.
-The plan:
+## What IS.exe revealed (read this first)
 
-1. Talk to the box with **libusb** (through `pyusb`) instead of the old driver.
-2. **Record** the original iShow software talking to the box once, on an old
-   Windows VM or PC.
-3. **Read the protocol out of the recording** with `analyze_capture.py`.
-4. Write the layout into `protocol.json`, then drive the laser from Python
-   with `ishow_dac.py`.
+Decompiling iShow 2.3's `IS.exe` showed that **the software never talks USB**.
+Its only output path (`hwmain.hwout.sendout`) streams frames over **TCP to
+`192.168.1.172`, port 4000**. `CyUSB.dll` ships in the folder, but IS.exe never
+loads it. The box is `3333:6666` on USB, so its USB port most likely shows up on
+the PC as a **USB network adapter** (RNDIS/CDC). The old "driver" was a
+network-adapter `.inf` that Windows 11 no longer matches automatically.
+
+The decoded protocol, implemented in `ishow_net.py`:
+
+- **Per chunk (up to 15000 bytes):** open a TCP connection to the box on port 4000.
+  Read 20 bytes; the first 4 are a little-endian int32 status. If the status is
+  ≤ 0 the box is busy, so close and retry.
+- **Header (8 bytes):** speed×2, "je", colour setting, 1 if the frame fits in
+  one chunk (else 0), then `04 05 06 07`.
+- **Payload:** the point bytes, then close the connection.
+- **Each point is 6 bytes:** `X, Y, R, I, B, G`, all 0–255, with the centre at 127.5.
+  I = 0.299R + 0.587G + 0.114B.
+- **Frame end:** the frame ends with the last position repeated, blanked.
+- **Streaming:** iShow re-sends the current frame continuously. The status reply
+  is the flow control.
+
+```
+python fake_box.py                                   # terminal 1: simulated box
+python ishow_net.py --ip 127.0.0.1 --shape square    # terminal 2
+python ishow_net.py --shape circle --seconds 10      # the real box at 192.168.1.172
+```
+
+```python
+from ishow_net import IShowNet
+from ishow_dac import Point
+
+with IShowNet() as dac:                  # 192.168.1.172:4000
+    while True:
+        dac.send_frame([Point(-0.5, 0, r=1), Point(0.5, 0, r=1)])
+```
+
+**Getting the PC onto the box's network over USB:** In Device Manager, right-click
+the *Unknown device* and choose Update driver → Browse my computer → Let me pick →
+**Network adapters** → **Microsoft** → **Remote NDIS Compatible Device**. Windows 11
+includes that driver, and it is signed. If a new network adapter appears, give it the
+static IP `192.168.1.10`, subnet mask `255.255.255.0`. Then run `ping 192.168.1.172`.
+If Zadig/WinUSB was installed on the box, uninstall it first: Device Manager →
+Uninstall device → tick "delete the driver".
+
+The USB-capture tools below (`probe.py`, `analyze_capture.py`, `ishow_dac.py`)
+are only needed if the box turns out *not* to be a network adapter.
 
 | File | What it does |
 |---|---|
@@ -18,6 +55,8 @@ The plan:
 | `analyze_capture.py` | Reads a Wireshark capture: start-up commands, packet header, bytes per point |
 | `protocol.json` | The byte layout of the box (**placeholder values until you fill it in**) |
 | `ishow_dac.py` | The driver: `IShowDAC`, `Point`, test shapes, `.ild` playback, `--dry-run` |
+| `ishow_net.py` | **The decoded iShow 2.3 protocol** (TCP 192.168.1.172:4000) |
+| `fake_box.py` | Simulated box for testing `ishow_net.py` without hardware |
 | `ilda.py` | Reads `.ild` files (formats 0, 1, 2, 4, 5) |
 
 ```
