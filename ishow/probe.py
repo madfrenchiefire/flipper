@@ -31,6 +31,7 @@ BLANK_CHIPS = {
     (0x04B4, 0x8613): "Cypress FX2 (CY7C68013) with no firmware",
     (0x04B4, 0x8614): "Cypress FX2LP with no firmware",
     (0x0547, 0x2131): "Anchor/Cypress EZ-USB with no firmware",
+    (0x3333, 0x6666): "iShow box: CY7C68013A whose 24C01 EEPROM holds only this ID, no firmware",
 }
 
 # The iShow 2.3 box seen so far (an unregistered, self-assigned ID).

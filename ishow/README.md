@@ -9,14 +9,21 @@ loads it.
 
 **But the board has no network hardware.** The photo of the "Guicard13" board (2011-12-10) shows:
 
-- **U1: Cypress CY7C68013A (FX2LP)**, the USB chip, with a 24 MHz crystal.
+Parts confirmed from close-up photos:
+
+- **U1: Cypress CY7C68013A-56PVXC (FX2LP)**, the USB chip, with a 24 MHz crystal.
 - **U3: 24C01 EEPROM**, only 128 bytes. That is enough for the USB ID (`3333:6666`) and nothing else.
   The FX2 therefore runs no program until the PC uploads firmware into it each time the box is
-  plugged in. Something on the PC used to do that through `CyUSB.dll`.
-- **U6: STC89C52**, an 8051 microcontroller with its own 24 MHz crystal. It has a serial programming
-  header (`ISP`: G R T V).
-- **U4** (24-pin chip, probably the DAC) and **U2/U5** (14-pin, probably op-amps) feed the ILDA DB25.
-  An A0512S module makes the ±12 V supply.
+  plugged in. On Windows this was done by the Cypress driver (CyUSB.sys plus a firmware script/hex
+  named in its `.inf`).
+- **U6: STC90C52RC**, an 8051 microcontroller with its own 24 MHz crystal and a serial programming
+  header (`ISP`: G R T V). It sits between the FX2 and the outputs and most likely does the timing.
+- **U4: TI TLC7528C**, a *dual 8-bit* DAC. These are the X and Y outputs, so **positions are 8-bit
+  (0–255)**, matching IS.exe.
+- **U2: LM324**, a quad op-amp that turns the DAC outputs into ILDA X/Y signals.
+- **U5: 74HC08**, four AND gates feeding the ILDA colour pins. **Colours are on/off (TTL)**: red,
+  green and blue are each either fully on or off (7 colours plus blank), with no dimming.
+- An **A0512S** module makes the ±12 V supply.
 - **No Ethernet chip or transformer.** The RJ45 jack is probably DMX or a link port.
 
 So the box is really a USB device. iShow 2.3 sends to 192.168.1.172:4000, so either this IS.exe was
