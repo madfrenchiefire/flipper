@@ -5,9 +5,24 @@
 Decompiling iShow 2.3's `IS.exe` showed that **the software never talks USB**.
 Its only output path (`hwmain.hwout.sendout`) streams frames over **TCP to
 `192.168.1.172`, port 4000**. `CyUSB.dll` ships in the folder, but IS.exe never
-loads it. The box is `3333:6666` on USB, so its USB port most likely shows up on
-the PC as a **USB network adapter** (RNDIS/CDC). The old "driver" was a
-network-adapter `.inf` that Windows 11 no longer matches automatically.
+loads it.
+
+**But the board has no network hardware.** The photo of the "Guicard13" board (2011-12-10) shows:
+
+- **U1: Cypress CY7C68013A (FX2LP)**, the USB chip, with a 24 MHz crystal.
+- **U3: 24C01 EEPROM**, only 128 bytes. That is enough for the USB ID (`3333:6666`) and nothing else.
+  The FX2 therefore runs no program until the PC uploads firmware into it each time the box is
+  plugged in. Something on the PC used to do that through `CyUSB.dll`.
+- **U6: STC89C52**, an 8051 microcontroller with its own 24 MHz crystal. It has a serial programming
+  header (`ISP`: G R T V).
+- **U4** (24-pin chip, probably the DAC) and **U2/U5** (14-pin, probably op-amps) feed the ILDA DB25.
+  An A0512S module makes the ±12 V supply.
+- **No Ethernet chip or transformer.** The RJ45 jack is probably DMX or a link port.
+
+So the box is really a USB device. iShow 2.3 sends to 192.168.1.172:4000, so either this IS.exe was
+built for a network box, or a separate helper program received that data and passed it on over USB
+(the most likely user of `CyUSB.dll`). That helper, or the firmware file it uploads, is the missing
+piece. Look in the iShow folder for other `.exe` files and for `.hex`/`.iic`/`.spt`/`.bix`/`.sys` files.
 
 The decoded protocol, implemented in `ishow_net.py`:
 
@@ -38,16 +53,8 @@ with IShowNet() as dac:                  # 192.168.1.172:4000
         dac.send_frame([Point(-0.5, 0, r=1), Point(0.5, 0, r=1)])
 ```
 
-**Getting the PC onto the box's network over USB:** In Device Manager, right-click
-the *Unknown device* and choose Update driver → Browse my computer → Let me pick →
-**Network adapters** → **Microsoft** → **Remote NDIS Compatible Device**. Windows 11
-includes that driver, and it is signed. If a new network adapter appears, give it the
-static IP `192.168.1.10`, subnet mask `255.255.255.0`. Then run `ping 192.168.1.172`.
-If Zadig/WinUSB was installed on the box, uninstall it first: Device Manager →
-Uninstall device → tick "delete the driver".
-
 The USB-capture tools below (`probe.py`, `analyze_capture.py`, `ishow_dac.py`)
-are only needed if the box turns out *not* to be a network adapter.
+are the route for this USB board. The data format above is still the best guess for the points.
 
 | File | What it does |
 |---|---|
