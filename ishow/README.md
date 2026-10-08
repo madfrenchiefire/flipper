@@ -73,6 +73,7 @@ are the route for this USB board. The data format above is still the best guess 
 | `ishow_dac.py` | The driver: `IShowDAC`, `Point`, test shapes, `.ild` playback, `--dry-run` |
 | `ishow_net.py` | **The decoded iShow 2.3 protocol** (TCP 192.168.1.172:4000) |
 | `fake_box.py` | Simulated box for testing `ishow_net.py` without hardware |
+| `fx2load.py` | Loads a program into the box's FX2 chip (RAM only; unplugging undoes it) |
 | `ilda.py` | Reads `.ild` files (formats 0, 1, 2, 4, 5) |
 
 ```
@@ -232,3 +233,18 @@ DACs with open, documented protocols and ready-made Python libraries cost less t
 protocol), **LaserCube** (Wi-Fi/USB, open-source drivers). Any of them plugs
 into the same ILDA DB25 port on your laser. To use one, only the `_write`
 method in `ishow_dac.py` changes; the shapes and `.ild` playback stay as they are.
+
+## Using the box's own FX2 as a logic analyzer
+
+The STC90C52RC's program can't be read out (STC's bootloader has no read command), but its
+behaviour can be watched. The box's CY7C68013A is the same chip used in cheap 8-channel logic
+analyzers, so it can run sigrok's open-source **fx2lafw** firmware and show what is happening on
+the pins wired to the STC:
+
+1. Install **PulseView** (sigrok.org). Its install folder contains `fx2lafw-sigrok-fx2-8ch.fw`.
+2. `python fx2load.py "<PulseView folder>\share\sigrok-firmware\fx2lafw-sigrok-fx2-8ch.fw"`
+3. The box re-enumerates as `1d50:608c`. Use Zadig to give that ID the WinUSB driver (once).
+4. Open PulseView, choose the fx2lafw device and capture. Channels D0–D7 are FX2 port B pins.
+
+fx2lafw only *reads* the pins, so it can't fight the STC's outputs. Unplug the box to go back to
+the blank `3333:6666` state.
