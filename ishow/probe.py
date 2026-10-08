@@ -72,9 +72,7 @@ def dump(vid, pid):
     print(f"  Class        : 0x{dev.bDeviceClass:02x}")
 
     if (vid, pid) in BLANK_CHIPS:
-        print(f"\n  !! {BLANK_CHIPS[(vid, pid)]}.")
-        print("  !! You must capture or extract the firmware and upload it before anything")
-        print("  !! else works. See README section 'If the box has no firmware'.")
+        print(f"\n  Known chip: {BLANK_CHIPS[(vid, pid)]}.")
 
     for cfg in dev:
         print(f"\n  Configuration {cfg.bConfigurationValue}")
@@ -91,6 +89,36 @@ def dump(vid, pid):
                     f" max packet {ep.wMaxPacketSize}"
                 )
     print("\nThe bulk OUT endpoint is almost certainly where point data goes.")
+    check_fx2_firmware(dev)
+
+
+# The FX2's "no firmware" descriptor set: one interface, alt settings 0-3,
+# endpoints 1 OUT/IN, 2, 4, 6, 8.
+FX2_DEFAULT_EPS = {0x01, 0x81, 0x02, 0x04, 0x86, 0x88}
+CPUCS = 0xE600  # FX2 register; bit 0 = 1 means the 8051 core is held in reset
+
+
+def check_fx2_firmware(dev):
+    """Answer 'is a program running on the Cypress FX2?' two independent ways."""
+    print("\nFirmware check (Cypress FX2):")
+    alts = [i for i in dev[0] if i.bInterfaceNumber == 0]
+    eps = {ep.bEndpointAddress for i in alts for ep in i}
+    default_look = len(alts) == 4 and eps == FX2_DEFAULT_EPS and not dev.iProduct
+    print(f"  Descriptors look like the blank-chip default: {'YES' if default_look else 'no'}")
+
+    # Vendor request 0xA0 is answered by the FX2 hardware itself, with or
+    # without firmware, so reading CPUCS is a definitive test.
+    try:
+        cpucs = dev.ctrl_transfer(0xC0, 0xA0, CPUCS, 0, 1, timeout=1000)[0]
+    except Exception as e:  # not an FX2, or no WinUSB driver bound
+        print(f"  Could not read the FX2 CPU register ({e}).")
+        return
+    if cpucs & 1:
+        print(f"  CPUCS = 0x{cpucs:02x}: the FX2's processor is HELD IN RESET.")
+        print("  => NO firmware is running. The PC must upload it on every plug-in.")
+    else:
+        print(f"  CPUCS = 0x{cpucs:02x}: the FX2's processor is RUNNING.")
+        print("  => Firmware IS on the box (loaded from its EEPROM). Send this output to Claude!")
 
 
 if __name__ == "__main__":
