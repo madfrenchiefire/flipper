@@ -14,6 +14,17 @@ import sys
 import usb.core
 import usb.util
 
+
+def backend():
+    """On Windows, use the libusb DLL bundled with the libusb-package pip package."""
+    try:
+        import libusb_package
+
+        return libusb_package.get_libusb1_backend()
+    except ImportError:
+        return None  # Linux/macOS: system libusb
+
+
 # VID:PID pairs that mean "this chip has no firmware yet; the old Windows
 # driver uploads it every time the box is plugged in".
 BLANK_CHIPS = {
@@ -21,6 +32,9 @@ BLANK_CHIPS = {
     (0x04B4, 0x8614): "Cypress FX2LP with no firmware",
     (0x0547, 0x2131): "Anchor/Cypress EZ-USB with no firmware",
 }
+
+# The iShow 2.3 box seen so far (an unregistered, self-assigned ID).
+ISHOW_IDS = [(0x3333, 0x6666)]
 
 XFER_TYPES = {0: "control", 1: "isochronous", 2: "bulk", 3: "interrupt"}
 
@@ -35,16 +49,17 @@ def safe_string(dev, index):
 
 
 def list_devices():
-    for dev in usb.core.find(find_all=True):
+    for dev in usb.core.find(find_all=True, backend=backend()):
         name = " ".join(
             s for s in (safe_string(dev, dev.iManufacturer), safe_string(dev, dev.iProduct)) if s
         )
-        print(f"{dev.idVendor:04x}:{dev.idProduct:04x}  bus {dev.bus} addr {dev.address}  {name}")
+        tag = "  <- iShow box" if (dev.idVendor, dev.idProduct) in ISHOW_IDS else ""
+        print(f"{dev.idVendor:04x}:{dev.idProduct:04x}  bus {dev.bus} addr {dev.address}  {name}{tag}")
     print("\nUnplug the iShow box, run again, and the line that disappears is your box.")
 
 
 def dump(vid, pid):
-    dev = usb.core.find(idVendor=vid, idProduct=pid)
+    dev = usb.core.find(idVendor=vid, idProduct=pid, backend=backend())
     if dev is None:
         sys.exit(f"No device {vid:04x}:{pid:04x} found (Windows: did you install WinUSB with Zadig?)")
 

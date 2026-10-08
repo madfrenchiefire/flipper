@@ -131,8 +131,10 @@ class IShowDAC:
         import usb.core
         import usb.util
 
+        from probe import backend
+
         vid, pid = _int(self.cfg["vid"]), _int(self.cfg["pid"])
-        self.dev = usb.core.find(idVendor=vid, idProduct=pid)
+        self.dev = usb.core.find(idVendor=vid, idProduct=pid, backend=backend())
         if self.dev is None:
             raise RuntimeError(
                 f"iShow box {vid:04x}:{pid:04x} not found. On Windows, bind it to WinUSB with Zadig."

@@ -44,7 +44,7 @@ Then run:
 
 ```
 python probe.py                # unplug/replug to see which line is the box
-python probe.py 04b4 8613      # dump that device (use your VID/PID)
+python probe.py 3333 6666      # dump the iShow 2.3 box (its ID is 3333:6666)
 ```
 
 Write down the **VID/PID** and the **bulk OUT endpoint**. Point data almost
