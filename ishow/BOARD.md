@@ -49,6 +49,14 @@ corner pin on the DAC side, nearest the DAC. The crystal (pins 11/12), USB (15/1
 - So the hypothesis is that **the DAC data bus is FX2 port D**, driven directly by the USB chip.
 - The lower pins on U1's DAC side (PB, CTL, PA region) go into vias, probably to the STC90C52RC.
 
+## ISP header (STC90C52RC programming / serial port)
+
+4-pin header labelled `ISP`, pins **V R T G**: +5 V, RXD (STC serial input), TXD (STC serial
+output), GND. The STC's bootloader listens here briefly at power-up. Programming through it (e.g.
+with `stcgal`) erases the STC's existing program permanently, because STC flash can't be read back.
+Listening only (adapter GND to G, adapter RX to T) is safe. Never connect V while the board is
+powered from USB.
+
 ## Multimeter results
 
 | From | To | Result |
