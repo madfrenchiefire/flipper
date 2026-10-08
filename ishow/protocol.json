@@ -1,0 +1,33 @@
+{
+  "_comment": "PLACEHOLDER VALUES. Replace vid/pid/endpoints with what probe.py shows, and the header/point layout with what analyze_capture.py shows. The layout below is only a common DAC pattern (12-bit X/Y + 8-bit colour), not the confirmed iShow format.",
+
+  "vid": "0x0000",
+  "pid": "0x0000",
+  "interface": 0,
+  "out_endpoint": "0x02",
+  "status_endpoint": null,
+
+  "session_file": null,
+
+  "points_per_second": 20000,
+  "max_points_per_packet": 500,
+  "software_pacing": true,
+
+  "header": [
+    {"type": "const", "hex": ""},
+    {"type": "count", "size": 2, "endian": "little"}
+  ],
+  "footer_hex": "",
+
+  "point": {
+    "size": 8,
+    "fields": [
+      {"name": "x", "offset": 0, "size": 2, "endian": "little", "min": 0, "max": 4095},
+      {"name": "y", "offset": 2, "size": 2, "endian": "little", "min": 0, "max": 4095},
+      {"name": "r", "offset": 4, "size": 1, "min": 0, "max": 255},
+      {"name": "g", "offset": 5, "size": 1, "min": 0, "max": 255},
+      {"name": "b", "offset": 6, "size": 1, "min": 0, "max": 255},
+      {"name": "i", "offset": 7, "size": 1, "min": 0, "max": 255}
+    ]
+  }
+}
