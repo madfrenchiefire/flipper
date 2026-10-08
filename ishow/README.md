@@ -16,6 +16,8 @@ Parts confirmed from close-up photos:
   The FX2 therefore runs no program until the PC uploads firmware into it each time the box is
   plugged in. On Windows this was done by the Cypress driver (CyUSB.sys plus a firmware script/hex
   named in its `.inf`).
+  **Confirmed on the real box:** `probe.py 3333 6666` shows the blank-FX2 default descriptors, and
+  CPUCS = 0x29, so the FX2's processor is held in reset. No firmware is on the box.
 - **U6: STC90C52RC**, an 8051 microcontroller with its own 24 MHz crystal and a serial programming
   header (`ISP`: G R T V). It sits between the FX2 and the outputs and most likely does the timing.
 - **U4: TI TLC7528C**, a *dual 8-bit* DAC. These are the X and Y outputs, so **positions are 8-bit
