@@ -44,15 +44,32 @@ ISHOW_HOMES = [CONTENT_DIR, r"C:\iShowII_EN", r"C:\iShowII", r"C:\iShow",
                r"C:\Program Files\iShow", r"C:\Program Files (x86)\iShow"]
 
 
+ISHOW_SUBFOLDERS = [os.path.join("Quickframe", "A"), os.path.join("Quickframe", "B"),
+                    os.path.join("Quickframe", "C"), "Frames", "ILDAimage", "Drawing"]
+
+
 def find_ishow_folders():
-    """iShow II content folders that hold .ild files (ILDAimage), from the usual locations."""
-    found = []
+    """iShow II content folders (Quickframe A/B/C, Frames, ILDAimage, Drawing), from the usual
+    locations. The first location that has a folder wins, so nothing is listed twice."""
+    found, seen = [], set()
     for home in ISHOW_HOMES:
-        for sub in ("ILDAimage", "ILDA", "Ilda"):
+        for sub in ISHOW_SUBFOLDERS:
             folder = os.path.join(home, sub)
-            if os.path.isdir(folder) and folder not in found:
+            if sub not in seen and os.path.isdir(folder):
                 found.append(folder)
+                seen.add(sub)
     return found
+
+
+def folder_title(folder):
+    name = os.path.basename(folder) or folder
+    parent = os.path.basename(os.path.dirname(folder))
+    if parent.lower() == "quickframe":
+        return f"Quickframe {name}"
+    return {"Drawing": "Drawings", "ILDAimage": "ILDA images", "Frames": "Frames"}.get(name, f"Folder: {name}")
+
+
+COLLAPSE_ABOVE = 500   # sections with more files than this start collapsed (Drawing: 2,629)
 
 BG, PANEL, BEAM = "#15171c", "#1f232b", "#39ff6a"
 PREVIEW = 205   # size of the "Now showing" preview, in pixels
@@ -411,7 +428,7 @@ class App:
         head.pack(fill="x")
         tk.Label(head, text="Click to show on the laser \u2022 right-click to preview", bg=BG, fg="#d8dde6",
                  font=("Segoe UI", 11, "bold")).pack(side="left")
-        ttk.Button(head, text="Add laser files (.ild)…", command=self.add_files).pack(side="right")
+        ttk.Button(head, text="Add laser files…", command=self.add_files).pack(side="right")
         ttk.Button(head, text="Add folder…", command=self.add_folder).pack(side="right", padx=6)
         self.scroll = ScrollFrame(right)
         self.scroll.pack(fill="both", expand=True, pady=(6, 0))
@@ -471,7 +488,7 @@ class App:
     def _load_library_files(self):
         os.makedirs(LIBRARY_DIR, exist_ok=True)
         for name in sorted(os.listdir(LIBRARY_DIR)):
-            if name.lower().endswith(".ild"):
+            if name.lower().endswith(patterns.LASER_FILE_TYPES):
                 try:
                     self._add_file_item(os.path.join(LIBRARY_DIR, name))
                 except Exception as e:  # noqa: BLE001
@@ -479,7 +496,7 @@ class App:
         self._relayout_files()
 
     def _add_file_item(self, path):
-        item = patterns.ilda_item(path, lazy=True)
+        item = patterns.file_item(path, lazy=True)
         item.fps = self.settings["file_fps"]
         self._add_tile(self.sec_files, item, removable=True)
 
@@ -495,7 +512,7 @@ class App:
         if folder in self.settings["removed_folders"]:
             self.settings["removed_folders"].remove(folder)
         if not self._ild_files(folder):
-            messagebox.showinfo(APP_NAME, "No .ild laser files in that folder.")
+            messagebox.showinfo(APP_NAME, "No laser files (.ild, .ilf, .ddr) in that folder.")
             return
         self.settings["folders"].append(folder)
         self._save_settings()
@@ -517,19 +534,40 @@ class App:
     @staticmethod
     def _ild_files(folder):
         try:
-            return sorted((n for n in os.listdir(folder) if n.lower().endswith(".ild")), key=str.lower)
+            return sorted((n for n in os.listdir(folder) if n.lower().endswith(patterns.LASER_FILE_TYPES)),
+                          key=str.lower)
         except OSError:
             return []
 
     def _open_folder(self, folder):
         names = self._ild_files(folder)
-        title = f"Folder: {os.path.basename(folder) or folder}  ({len(names)} files)"
+        title = f"{folder_title(folder)}  ({len(names)})"
         if not names:
             title += " – not found"
         sec = self._section(title, on_remove=lambda f=folder: self.remove_folder(f))
+        sec.paths = [os.path.join(folder, n) for n in names]
+        sec.shown = len(names) <= COLLAPSE_ABOVE
+        sec.toggle = ttk.Button(sec.head, command=lambda s=sec: self._toggle_section(s))
+        sec.toggle.pack(side="right", padx=6)
         self.folder_sections[folder] = sec
+        self._show_section(sec, sec.shown)
+
+    def _show_section(self, sec, show):
+        sec.shown = show
+        sec.toggle.config(text="Hide" if show else f"Show all {len(sec.paths)}")
+        if show:
+            if not sec.tiles:
+                self._queue_tiles(sec)
+            sec.pack(fill="x", after=sec.head)
+        else:
+            sec.pack_forget()
+
+    def _toggle_section(self, sec):
+        self._show_section(sec, not sec.shown)
+
+    def _queue_tiles(self, sec):
         start = not self.pending_tiles
-        self.pending_tiles += [(sec, os.path.join(folder, n)) for n in names]
+        self.pending_tiles += [(sec, p) for p in sec.paths]
         if start and self.pending_tiles:
             self.root.after(10, self._build_pending_tiles)
 
@@ -542,7 +580,7 @@ class App:
             if not sec.winfo_exists():
                 continue
             try:
-                item = patterns.ilda_item(path, lazy=True)
+                item = patterns.file_item(path, lazy=True)
                 item.fps = self.settings["file_fps"]
                 self._add_tile(sec, item)
             except Exception as e:  # noqa: BLE001 - a bad file shouldn't stop the rest
@@ -574,11 +612,12 @@ class App:
 
     def add_files(self):
         paths = filedialog.askopenfilenames(title="Add laser files",
-                                            filetypes=[("ILDA laser files", "*.ild *.ILD"), ("All files", "*.*")])
+                                            filetypes=[("Laser files", "*.ild *.ILD *.ilf *.ddr *.DDR"),
+                                                       ("All files", "*.*")])
         added = 0
         for src in paths:
             try:
-                patterns.ilda_item(src, lazy=True)   # validate before copying
+                patterns.file_item(src, lazy=True)   # validate before copying
                 dest = os.path.join(LIBRARY_DIR, os.path.basename(src))
                 base, ext = os.path.splitext(dest)
                 n = 2
@@ -590,7 +629,7 @@ class App:
                 added += 1
             except Exception as e:  # noqa: BLE001
                 messagebox.showerror(APP_NAME, f"Couldn't read {os.path.basename(src)}:\n{e}\n\n"
-                                               "Only ILDA (.ild) files are supported.")
+                                               "Supported: ILDA (.ild) and iShow (.ilf, .ddr) files.")
         self._relayout_files()
         if added:
             self.log(f"Added {added} laser file(s).")

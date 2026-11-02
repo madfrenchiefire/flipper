@@ -193,6 +193,12 @@ writes on endpoint 2. Decoded from both ends (the program's calls and the firmwa
 
 The resources hold only UI forms and bitmaps. There's no built-in pattern library in the .exe.
 
+iShow's content formats (decoded from the files, read by `ishow_formats.py`): `.ilf` is text, with
+`DrawingName=N` frames of `x,y,z,colour,0,flags|...` points. `.ddr` is binary, 5 bytes per point:
+`x, y, corner, colour, flags`. x/y are 0–255 with y = 0 at the top. flags bit 0 = start of a line
+(blank jump), 128 = last point. colour 0 = off, 1–7 = the 7-colour palette. These are the same
+jump/line steps the firmware's `[colour, type, X, Y]` records use.
+
 ## Test firmware note
 
 The first test program (pinwiggle) used the FX2's 0xA0 memory request while the 8051 was running.

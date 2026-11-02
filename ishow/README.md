@@ -16,9 +16,10 @@ python ishow_app.py --demo     # try it without hardware
 - **Laser text**: type up to two lines, then **Show text on laser**.
 - **Test patterns** and **Pictures**: click any tile to show it.
 - **Add laser files (.ild)**: imported files get a preview icon and are kept in `laser_files/`.
-- **Original iShow II content**: copy iShow II's `ILDAimage` folder (and the others listed in
-  `ishow_content/README.md`) into `ishow_content/`. The app adds them to the library on its own,
-  and also finds an unpacked `C:\iShowII_EN`.
+- **Original iShow II content** (in `ishow_content/`) is added to the library automatically, as
+  sections: Quickframe A/B/C and Frames (iShow's `.ilf` animations), ILDA images (476 `.ild`
+  files) and Drawings (2,629 `.ddr` pictures, collapsed until you click **Show all**). An unpacked
+  `C:\iShowII_EN` is found too. **Add laser files** also accepts `.ilf` and `.ddr`.
 - **Add folder…**: link a whole folder of `.ild` files, for example iShow II's `ILDAimage` folder
   (476 files). The files stay where they are. Icons appear a few at a time, and a file is only
   loaded in full when you show or preview it. **Remove folder** unlinks it (no files are deleted).

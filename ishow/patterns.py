@@ -150,8 +150,7 @@ class LibraryItem:
     def load(self):
         """Read the whole file (can take a moment for big .ild files)."""
         if not self.loaded and self.path:
-            from ilda import read_ilda
-            frames = read_ilda(self.path)
+            frames = read_laser_file(self.path)
             if not frames:
                 raise ValueError("no frames in file")
             self.frames = frames
@@ -209,6 +208,35 @@ def builtin_items():
 def text_item(lines):
     lines = [ln for ln in lines if ln.strip()][:2]
     return static(" / ".join(lines) or "(empty)", text_strokes(lines), "text")
+
+
+LASER_FILE_TYPES = (".ild", ".ilf", ".ddr")   # ILDA, iShow animations, iShow drawings
+
+
+def read_laser_file(path, max_frames=None):
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".ild":
+        from ilda import read_ilda
+        return read_ilda(path, max_frames)
+    from ishow_formats import READERS
+    if ext not in READERS:
+        raise ValueError(f"unsupported file type {ext}")
+    return READERS[ext](path, max_frames)
+
+
+def file_item(path, lazy=False):
+    """Any supported laser file as a library item. lazy=True reads only the first frame now
+    (for previews); the rest is read by item.load() when it's first shown."""
+    name = os.path.splitext(os.path.basename(path))[0]
+    if lazy:
+        first = read_laser_file(path, max_frames=1)
+        if not first:
+            raise ValueError("no frames in file")
+        return LibraryItem(name, fps=20, path=path, kind="file", first=first[0])
+    frames = read_laser_file(path)
+    if not frames:
+        raise ValueError("no frames in file")
+    return LibraryItem(name, frames=frames, fps=20, path=path, kind="file")
 
 
 def ilda_item(path, lazy=False):
