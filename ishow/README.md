@@ -18,7 +18,10 @@ python ishow_app.py --demo     # try it without hardware
 - **Connect** finds the box and uploads our firmware only if it isn't already running.
 - **Status lights**: *USB box* (found), *Firmware* (running), *Responding* (the box answered within
   the last 2.5 s). The line next to them shows the scan rate, points sent and any gaps.
-- **Laser text**: type up to two lines, then **Show text on laser**.
+- **Laser text**: type up to two lines, pick an **Effect** (Still, Write on, Typewriter, Scroll
+  left, Wave, 3D spin, Pulse, Drop in, Flash, Sparkle) and a **Speed** (Slow, Normal, Fast), then
+  **Show text**. Changing the effect while text is showing updates it straight away; the choice is
+  remembered. Preview of all effects: `docs/text_effects.gif`.
 - **Test patterns** and **Pictures**: click any tile to show it.
 - **Add laser files (.ild)**: imported files get a preview icon and are kept in `laser_files/`.
 - **Original iShow II content** (in `ishow_content/`) is added to the library automatically, as

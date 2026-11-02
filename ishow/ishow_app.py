@@ -37,7 +37,8 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "ishow_app_settings.json")
 
 DEFAULT_SETTINGS = {"rate": 20, "limit": 5.0, "invert_x": False, "invert_y": False,
                     "swap_xy": False, "mono_green": True, "file_fps": 20, "line_step": 3,
-                    "folders": [], "removed_folders": [], "file_speeds": {}}
+                    "folders": [], "removed_folders": [], "file_speeds": {},
+                    "text_effect": "Still", "text_speed": "Normal"}
 
 # Where the original iShow II content can be: first the project's own copy (ishow_content, next to
 # this app or the .exe), then an unpacked or installed iShow II. Found folders are linked automatically.
@@ -440,13 +441,27 @@ class App:
                  wraplength=PREVIEW).pack(pady=(4, 0))
 
         txt = ttk.LabelFrame(left, text="Laser text (up to 2 lines)", padding=8)
-        txt.pack(fill="x", pady=8)
+        txt.pack(fill="x", pady=6)
         self.text_box = tk.Text(txt, height=2, width=30, font=("Consolas", 14), bg="black", fg=BEAM,
                                 insertbackground=BEAM, wrap="none")
         self.text_box.pack(fill="x")
         self.text_box.insert("1.0", "HELLO")
         self.text_box.bind("<KeyRelease>", self._limit_text)
-        ttk.Button(txt, text="Show text on laser", command=self.show_text).pack(fill="x", pady=(6, 0))
+        fx = tk.Frame(txt, bg=PANEL)
+        fx.pack(fill="x", pady=(6, 0))
+        self.var_effect = tk.StringVar(value=self.settings["text_effect"])
+        self.var_tspeed = tk.StringVar(value=self.settings["text_speed"])
+        tk.Label(fx, text="Effect", bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9)).pack(side="left")
+        effect = ttk.Combobox(fx, textvariable=self.var_effect, values=shows.TEXT_EFFECTS,
+                              state="readonly", width=11)
+        effect.pack(side="left", padx=(4, 10))
+        tk.Label(fx, text="Speed", bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9)).pack(side="left")
+        speed = ttk.Combobox(fx, textvariable=self.var_tspeed, values=list(shows.TEXT_SPEEDS),
+                             state="readonly", width=7)
+        speed.pack(side="left", padx=4)
+        for box in (effect, speed):
+            box.bind("<<ComboboxSelected>>", self._text_effect_changed)
+        ttk.Button(fx, text="Show text", command=self.show_text).pack(side="right")
 
         st = ttk.LabelFrame(left, text="Settings", padding=8)
         st.pack(fill="x")
@@ -854,7 +869,14 @@ class App:
             return
         for t in self.tiles:
             t.select(False)
-        self.play(patterns.text_item(lines))
+        self.play(shows.text_effect_item(lines, self.var_effect.get(), self.var_tspeed.get()))
+
+    def _text_effect_changed(self, event=None):
+        self.settings["text_effect"] = self.var_effect.get()
+        self.settings["text_speed"] = self.var_tspeed.get()
+        self._save_settings()
+        if self.current is not None and self.current.kind == "text":
+            self.show_text()          # the text on the laser now picks up the new effect
 
     def _limit_text(self, event=None):
         lines = self.text_box.get("1.0", "end-1c").split("\n")
@@ -879,9 +901,8 @@ class App:
                                                  "overdrive the laser's mirrors.\n\nUse it anyway?"):
                 self.var_limit.set(self.settings["limit"])
                 return
-        s["folders"], s["removed_folders"] = self.settings["folders"], self.settings["removed_folders"]
-        s["file_speeds"] = self.settings["file_speeds"]
-        self.settings = s
+        self.settings = {**self.settings, **s}     # keep folders, file speeds, text effect…
+        s = self.settings
         for t in self.tiles:
             if t.item.path:
                 t.item.fps = self.fps_for(t.item.path)

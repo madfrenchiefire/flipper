@@ -10,6 +10,7 @@ import math
 from laser_font import ADVANCE, GLYPHS
 from patterns import LibraryItem
 from patterns import strokes_to_points as _to_points
+from ishow_dac import Point
 
 
 GLYPH_H = 6
@@ -281,3 +282,130 @@ def show_items():
     items[0].preview_t = 5.0    # icons show the finished sign, not the first letter
     items[1].preview_t = 9.0
     return items
+
+
+# -- effects for the app's laser text box ------------------------------------------------------
+TEXT_EFFECTS = ["Still", "Write on", "Typewriter", "Scroll left", "Wave", "3D spin", "Pulse",
+                "Drop in", "Flash", "Sparkle"]
+TEXT_SPEEDS = {"Slow": 0.6, "Normal": 1.0, "Fast": 1.6}
+
+
+def clip_x(strokes, lo=-0.98, hi=0.98):
+    """Cut strokes to lo <= x <= hi (for scrolling text), splitting a stroke where it leaves."""
+    out = []
+    for s in strokes:
+        cur = []
+        for a, b in zip(s, s[1:]):
+            (x0, y0), (x1, y1) = a, b
+            t0, t1 = 0.0, 1.0
+            dx = x1 - x0
+            if dx == 0:
+                if not lo <= x0 <= hi:
+                    t0, t1 = 1.0, 0.0
+            else:
+                ta, tb = (lo - x0) / dx, (hi - x0) / dx
+                t0, t1 = max(t0, min(ta, tb)), min(t1, max(ta, tb))
+            if t0 > t1:                            # this segment is entirely outside
+                if len(cur) > 1:
+                    out.append(cur)
+                cur = []
+                continue
+            p0 = (x0 + dx * t0, y0 + (y1 - y0) * t0)
+            p1 = (x0 + dx * t1, y0 + (y1 - y0) * t1)
+            if not cur or cur[-1] != p0:
+                if len(cur) > 1:
+                    out.append(cur)
+                cur = [p0]
+            cur.append(p1)
+            if t1 < 1.0:                           # leaves the window part-way
+                out.append(cur)
+                cur = []
+        if len(cur) > 1:
+            out.append(cur)
+    return out
+
+
+def _bounds(strokes):
+    xs = [x for s in strokes for x, _ in s] or [0.0]
+    ys = [y for s in strokes for _, y in s] or [0.0]
+    return min(xs), max(xs), min(ys), max(ys)
+
+
+def text_effect(lines, effect="Still", speed=1.0):
+    """fn(t) -> laser points: the text lines with an animated effect, looping forever."""
+    lines = [ln for ln in lines if ln.strip()][:2] or [" "]
+    glyphs = layout(lines, box=1.7)
+    text = all_strokes(glyphs)
+    still = strokes_to_points(text)
+    order = sorted(glyphs, key=lambda g: (g.line, g.index))
+
+    if effect == "Scroll left":
+        big = layout(lines, box=10.0)                     # sized by height, not by width
+        x0, x1, y0, y1 = _bounds(all_strokes(big))
+        k = (1.1 if len(lines) == 1 else 1.5) / max(y1 - y0, 1e-6)
+        big_strokes = scale(all_strokes(big), k)
+        half = (x1 - x0) * k / 2
+        trip = 2 + 2 * half                               # enter at the right, leave at the left
+
+        def fn(t):
+            shift = 1 + half - (t * speed * 0.8) % trip
+            return strokes_to_points(clip_x(transform(big_strokes, lambda x, y: (x + shift, y))))
+        return fn
+
+    def fn(t):
+        t *= speed
+        if effect == "Write on":                          # write, hold, unwrite: 6 s
+            c = t % 6.0
+            if c < 2.5:
+                s = write_on(text, ease_in_out(phase(c, 0, 2.5)))
+            elif c < 5.0:
+                s = text
+            else:
+                s = write_on(text, 1 - phase(c, 5.0, 6.0))
+        elif effect == "Typewriter":                      # one letter at a time, hold, clear
+            per = 0.18
+            c = t % (len(order) * per + 2.0)
+            s = [st for i, g in enumerate(order) if c >= i * per for st in g.strokes]
+        elif effect == "Wave":
+            s = []
+            for g in glyphs:
+                dy = 0.08 * math.sin(t * 5 - g.cx * 5)
+                s += transform(g.strokes, lambda x, y, d=dy: (x, y + d))
+        elif effect == "3D spin":
+            s = spin_y(text, t * 1.6)
+        elif effect == "Pulse":
+            s = scale(text, 0.8 + 0.2 * math.sin(t * 3))
+        elif effect == "Drop in":                         # letters fall in and bounce, then hold
+            c = t % 5.0
+            s = []
+            for i, g in enumerate(order):
+                p = phase(c, 0.15 * i, 0.15 * i + 0.9)
+                if p <= 0:
+                    continue
+                drop = (1 - bounce(p)) * 1.5
+                s += transform(g.strokes, lambda x, y, d=drop: (x, y + d))
+            if c > 4.5:                                   # quick fade-out before it loops
+                s = scale(s, 1 - ease_in_out(phase(c, 4.5, 5.0)))
+        elif effect == "Flash":
+            return still if (t * 2) % 1.0 < 0.6 else [Point(0, 0)]
+        elif effect == "Sparkle":
+            x0, x1, y0, y1 = _bounds(text)
+            s = list(text)
+            for k in range(3):                            # stars twinkle around the text
+                p = (t * 0.7 + k / 3) % 1.0
+                cx = x0 + (x1 - x0) * ((k * 0.37 + math.floor(t * 0.7 + k / 3) * 0.61) % 1.0)
+                cy = (y1 + 0.12) if k % 2 == 0 else (y0 - 0.12)
+                s += sparkle(cx, cy, 0.08 * math.sin(math.pi * p))
+        else:
+            return still
+        return strokes_to_points(s)
+    return fn
+
+
+def text_effect_item(lines, effect="Still", speed_name="Normal"):
+    lines = [ln for ln in lines if ln.strip()][:2]
+    name = " / ".join(lines) or "(empty)"
+    fn = text_effect(lines, effect, TEXT_SPEEDS.get(speed_name, 1.0))
+    if effect == "Still":
+        return LibraryItem(name, frames=[fn(0)], kind="text")
+    return LibraryItem(f"{name}  ({effect.lower()})", generator=fn, kind="text")
