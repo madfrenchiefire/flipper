@@ -62,6 +62,16 @@ corner pin on the DAC side, nearest the DAC. The crystal (pins 11/12), USB (15/1
   WR#) aren't clear in the photos. The rest of U1's DAC side (port A, CTL) also goes into vias. The
   back side of the board will show where those go.
 
+### Back of the board (photo, tentative)
+
+Positions are mirrored from the top side. Two bundles of traces stand out:
+- **About 4–5 traces from the 74HC08 (U5) area to a diagonal row of vias by the USB chip (U1).** This
+  suggests the colour gates are driven by the USB chip, not the STC.
+- **About 7–8 parallel traces from the STC (U6) area to the USB chip area.** This is probably an
+  8-bit bus between FX2 port B (the pins that read steady high in PulseView) and an STC port.
+- DAC pin 6's via couldn't be followed at this resolution. Where DAC pins 6, 15 and 16 end up (U1 or
+  U6) is now the deciding question.
+
 ## ISP header (STC90C52RC programming / serial port)
 
 4-pin header labelled `ISP`, pins **V R T G**: +5 V, RXD (STC serial input), TXD (STC serial
