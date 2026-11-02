@@ -1,5 +1,30 @@
 # Controlling an iShow 2.3 laser box from Python
 
+## Desktop app
+
+![iShow Laser app](docs/app_screenshot.png)
+
+```
+python -m pip install pyusb libusb-package
+python ishow_app.py            # with the box plugged in (WinUSB installed with Zadig, see below)
+python ishow_app.py --demo     # try it without hardware
+```
+
+- **Connect** finds the box and uploads our firmware only if it isn't already running.
+- **Status lights**: *USB box* (found), *Firmware* (running), *Responding* (the box answered within
+  the last 2.5 s). The line next to them shows the scan rate, points sent and any gaps.
+- **Laser text**: type up to two lines, then **Show text on laser**.
+- **Test patterns** and **Pictures**: click any tile to show it.
+- **Add laser files (.ild)**: imported files get a preview icon and are kept in `laser_files/`.
+  Right-click one to remove it.
+- **STOP / BLANK** (or **Esc**) turns the beam off. The firmware also blanks the beam by itself if
+  the PC stops sending.
+- **Settings**: scan speed, output limit (5 V = ILDA standard, the default), file playback speed,
+  green-only laser (on by default), mirror, flip and swap X/Y. They're saved between runs.
+
+To make a double-clickable Windows program, run `build_exe.bat` in this folder. It creates
+`dist\iShow Laser.exe`.
+
 ## Quick start: driving the box directly (works on Windows 11)
 
 The original iShow driver and firmware are lost, so this project loads **its own firmware** into
@@ -102,6 +127,9 @@ are the route for this USB board. The data format above is still the best guess 
 | `ishow_net.py` | **The decoded iShow 2.3 protocol** (TCP 192.168.1.172:4000) |
 | `fake_box.py` | Simulated box for testing `ishow_net.py` without hardware |
 | `fx2load.py` | Loads a program into the box's FX2 chip (RAM only; unplugging undoes it) |
+| `ishow_app.py` | **The desktop app** (Connect, status lights, text, pictures, .ild files) |
+| `patterns.py`, `laser_font.py` | Built-in pictures/test patterns and the single-stroke laser font |
+| `fake_usb_box.py` | Simulated box used by `ishow_app.py --demo` |
 | `ishow_usb.py` + `firmware/stream.c` | **The working driver**: streams points to the box with our own FX2 firmware |
 | `fx2pins.py` + `firmware/pinctl.c` | Loads a small test program into the FX2 and lets you drive the DAC and port A/D pins by hand over USB |
 | `serial_listen.py` | Listens (read-only) to the STC chip's serial output on the ISP header |

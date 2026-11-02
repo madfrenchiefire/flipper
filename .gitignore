@@ -1,3 +1,8 @@
 __pycache__/
 *.pcap
 *.pcapng
+laser_files/
+ishow_app_settings.json
+build/
+dist/
+*.spec

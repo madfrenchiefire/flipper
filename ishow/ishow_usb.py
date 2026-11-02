@@ -36,7 +36,14 @@ from fx2load import load, read_image
 from ishow_dac import BLANK, Point, circle, rgb_test, square
 from probe import backend
 
-FIRMWARE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "firmware", "stream.ihx")
+
+def resource_path(*parts):
+    """Files shipped with the program (also works inside a PyInstaller .exe)."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, *parts)
+
+
+FIRMWARE = resource_path("firmware", "stream.ihx")
 EP_OUT, EP_IN = 0x02, 0x86
 MAX_POINTS = 170                 # 2 + 170 * 3 = 512 bytes per USB packet
 VOLTS_PER_STEP = 16.4 / 255      # measured: 0 -> -8.05 V, 255 -> +8.31 V
@@ -46,40 +53,66 @@ BLUE, GREEN, RED, INTENSITY = 0x04, 0x08, 0x10, 0x20
 
 
 class IShowUSB:
-    def __init__(self, rate_kpps=20, limit=5.0, invert_x=False, invert_y=False, swap_xy=False):
-        half = min(127, round(limit / VOLTS_PER_STEP))  # steps either side of centre
-        self.lo, self.hi = 128 - half, 128 + half
+    def __init__(self, rate_kpps=20, limit=5.0, invert_x=False, invert_y=False, swap_xy=False,
+                 mono_green=False, device=None):
         self.rate = rate_kpps
-        self.invert_x, self.invert_y, self.swap_xy = invert_x, invert_y, swap_xy
+        self.configure(limit, invert_x, invert_y, swap_xy, mono_green)
+        self.device = device     # a FakeBox for demo mode; None = find the real box
         self.dev = None
+        self.firmware_uploaded = False
+
+    def configure(self, limit=5.0, invert_x=False, invert_y=False, swap_xy=False, mono_green=False):
+        half = max(1, min(127, round(limit / VOLTS_PER_STEP)))  # steps either side of centre
+        self.lo, self.hi = 128 - half, 128 + half
+        self.invert_x, self.invert_y, self.swap_xy = invert_x, invert_y, swap_xy
+        self.mono_green = mono_green
+
+    @property
+    def limit_volts(self):
+        return (self.hi - 128) * VOLTS_PER_STEP
 
     # -- connection ---------------------------------------------------------
-    def open(self):
-        dev = usb.core.find(idVendor=0x3333, idProduct=0x6666, backend=backend())
+    def open(self, force_reload=False):
+        """Connect. Uploads the firmware only if it isn't already running."""
+        dev = self.device or usb.core.find(idVendor=0x3333, idProduct=0x6666, backend=backend())
         if dev is None:
             raise RuntimeError("iShow box (3333:6666) not found. Is it plugged in, with WinUSB (Zadig)?")
-        try:
-            dev.set_configuration()
-        except usb.core.USBError:
-            pass
-        usb.util.claim_interface(dev, 0)
+        if not getattr(dev, "is_fake", False):
+            try:
+                dev.set_configuration()
+            except usb.core.USBError:
+                pass
+            usb.util.claim_interface(dev, 0)
         dev.set_interface_altsetting(interface=0, alternate_setting=1)
-        load(dev, read_image(FIRMWARE))   # always reload: resets the box to a known state
-        time.sleep(0.3)
         self.dev = dev
+        self.firmware_uploaded = False
+        if force_reload or not self.firmware_running():
+            load(dev, read_image(FIRMWARE))
+            self.firmware_uploaded = True
+            time.sleep(0.3)
         self.set_rate(self.rate)
-        st = self.status()
-        print(f"iShow box ready: {st['rate']} kpps, output limited to "
-              f"+/-{(self.hi - 128) * VOLTS_PER_STEP:.1f} V")
+        self.status()
         return self
+
+    def firmware_running(self):
+        """True if our firmware answers a status request (a blank chip just ignores it)."""
+        try:
+            self.dev.write(EP_OUT, bytes((0x08, 0)), timeout=300)
+            r = bytes(self.dev.read(EP_IN, 64, timeout=300))
+            return len(r) >= 7 and r[0] == 0x5A
+        except usb.core.USBError:
+            return False
 
     def close(self):
         if self.dev is None:
             return
         try:
             self.blank()
+        except usb.core.USBError:
+            pass
         finally:
-            usb.util.dispose_resources(self.dev)
+            if not getattr(self.dev, "is_fake", False):
+                usb.util.dispose_resources(self.dev)
             self.dev = None
 
     def __enter__(self):
@@ -108,7 +141,10 @@ class IShowUSB:
 
     def encode(self, p):
         x, y = (p.y, p.x) if self.swap_xy else (p.x, p.y)
-        c = (RED if p.r >= 0.5 else 0) | (GREEN if p.g >= 0.5 else 0) | (BLUE if p.b >= 0.5 else 0)
+        if self.mono_green:  # single-colour laser: anything lit is drawn in green
+            c = GREEN if max(p.r, p.g, p.b) >= 0.5 else 0
+        else:
+            c = (RED if p.r >= 0.5 else 0) | (GREEN if p.g >= 0.5 else 0) | (BLUE if p.b >= 0.5 else 0)
         if c:
             c |= INTENSITY
         return bytes((self._scale(x, self.invert_x), self._scale(y, self.invert_y), c))
@@ -152,6 +188,7 @@ def main():
 
     frames = read_ilda(args.ilda) if args.ilda else None
     with IShowUSB(args.rate, args.limit, args.invert_x, args.invert_y, args.swap_xy) as dac:
+        print(f"iShow box ready: {dac.rate} kpps, output limited to +/-{dac.limit_volts:.1f} V")
         start = time.monotonic()
         while time.monotonic() - start < args.seconds:
             t = time.monotonic() - start
