@@ -16,7 +16,12 @@ python ishow_app.py --demo     # try it without hardware
 - **Laser text**: type up to two lines, then **Show text on laser**.
 - **Test patterns** and **Pictures**: click any tile to show it.
 - **Add laser files (.ild)**: imported files get a preview icon and are kept in `laser_files/`.
-  Right-click one to remove it.
+- **Add folder…**: link a whole folder of `.ild` files, for example iShow II's `ILDAimage` folder
+  (476 files). The files stay where they are. Icons appear a few at a time, and a file is only
+  loaded in full when you show or preview it. **Remove folder** unlinks it (no files are deleted).
+- **Right-click any icon**: **Preview…** opens a large animated preview without touching the laser,
+  and says how many frames and points the file has and whether it may flicker. Also **Show on
+  laser**, and **Remove** for your own files.
 - **STOP / BLANK** (or **Esc**) turns the beam off. The firmware also blanks the beam by itself if
   the PC stops sending.
 - **On-chip line drawing** (like the original iShow firmware): pictures and text are sent as corner

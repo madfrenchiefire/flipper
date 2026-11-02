@@ -137,14 +137,31 @@ def grid(n=4):
 class LibraryItem:
     """Something that can be shown: a static picture, an animation, or an .ild file."""
 
-    def __init__(self, name, frames=None, generator=None, fps=20, path=None, kind="pattern"):
+    def __init__(self, name, frames=None, generator=None, fps=20, path=None, kind="pattern", first=None):
         self.name, self.fps, self.path, self.kind = name, fps, path, kind
-        self.frames = frames          # list of point lists, or None for generated items
+        self.frames = frames          # list of point lists; None = not loaded yet (files)
         self.generator = generator    # fn(t) -> point list, for animations
+        self.first = first            # first frame only, for previews of not-yet-loaded files
+
+    @property
+    def loaded(self):
+        return self.generator is not None or self.frames is not None
+
+    def load(self):
+        """Read the whole file (can take a moment for big .ild files)."""
+        if not self.loaded and self.path:
+            from ilda import read_ilda
+            frames = read_ilda(self.path)
+            if not frames:
+                raise ValueError("no frames in file")
+            self.frames = frames
+        return self
 
     def frame_at(self, t):
         if self.generator:
             return self.generator(t)
+        if self.frames is None:
+            return self.first or [Point(0, 0)]
         return self.frames[int(t * self.fps) % len(self.frames)]
 
     def preview_frame(self):
@@ -194,17 +211,27 @@ def text_item(lines):
     return static(" / ".join(lines) or "(empty)", text_strokes(lines), "text")
 
 
-def ilda_item(path):
+def ilda_item(path, lazy=False):
+    """An .ild file as a library item. lazy=True reads only the first frame now (for previews);
+    the rest is read by item.load() when it's first shown."""
     from ilda import read_ilda
+    name = os.path.splitext(os.path.basename(path))[0]
+    if lazy:
+        first = read_ilda(path, max_frames=1)
+        if not first:
+            raise ValueError("no frames in file")
+        return LibraryItem(name, fps=20, path=path, kind="file", first=first[0])
     frames = read_ilda(path)
     if not frames:
         raise ValueError("no frames in file")
-    return LibraryItem(os.path.splitext(os.path.basename(path))[0], frames=frames, fps=20,
-                       path=path, kind="file")
+    return LibraryItem(name, frames=frames, fps=20, path=path, kind="file")
 
 
-def preview_segments(points):
-    """Lit line segments of a point list, for drawing a preview: [(x0, y0, x1, y1), ...]."""
+def preview_segments(points, max_points=1500):
+    """Lit line segments of a point list, for drawing a preview: [(x0, y0, x1, y1), ...].
+    Very dense frames are thinned to keep previews quick to draw."""
+    if len(points) > max_points:
+        points = points[:: len(points) // max_points + 1]
     segs = []
     for a, b in zip(points, points[1:]):
         if max(b.r, b.g, b.b) >= 0.5 and (a.x, a.y) != (b.x, b.y):

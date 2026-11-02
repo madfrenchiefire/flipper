@@ -32,7 +32,8 @@ LIBRARY_DIR = os.path.join(BASE_DIR, "laser_files")
 SETTINGS_FILE = os.path.join(BASE_DIR, "ishow_app_settings.json")
 
 DEFAULT_SETTINGS = {"rate": 20, "limit": 5.0, "invert_x": False, "invert_y": False,
-                    "swap_xy": False, "mono_green": True, "file_fps": 20, "line_step": 3}
+                    "swap_xy": False, "mono_green": True, "file_fps": 20, "line_step": 3,
+                    "folders": []}
 
 BG, PANEL, BEAM = "#15171c", "#1f232b", "#39ff6a"
 PREVIEW = 205   # size of the "Now showing" preview, in pixels
@@ -139,10 +140,10 @@ class LaserWorker(threading.Thread):
 # ----------------------------------------------------------------------------
 # GUI pieces
 # ----------------------------------------------------------------------------
-def draw_points(canvas, points, size, pad=4, width=1):
+def draw_points(canvas, points, size, pad=4, width=1, max_points=1500):
     canvas.delete("all")
     span = size - 2 * pad
-    for x0, y0, x1, y1 in patterns.preview_segments(points):
+    for x0, y0, x1, y1 in patterns.preview_segments(points, max_points):
         canvas.create_line(pad + (x0 + 1) / 2 * span, pad + (1 - y0) / 2 * span,
                            pad + (x1 + 1) / 2 * span, pad + (1 - y1) / 2 * span,
                            fill=BEAM, width=width, capstyle="round")
@@ -163,14 +164,14 @@ class Light(tk.Frame):
 class Tile(tk.Frame):
     SIZE = 104
 
-    def __init__(self, master, item, on_click, on_remove=None):
+    def __init__(self, master, item, on_click, on_menu):
         super().__init__(master, bg=PANEL, highlightthickness=2, highlightbackground=PANEL)
         self.item = item
         self.canvas = tk.Canvas(self, width=self.SIZE, height=self.SIZE, bg="black",
                                 highlightthickness=0, cursor="hand2")
         self.canvas.pack(padx=4, pady=(4, 0))
         try:
-            draw_points(self.canvas, item.preview_frame(), self.SIZE)
+            draw_points(self.canvas, item.preview_frame(), self.SIZE, max_points=600)
         except Exception:  # noqa: BLE001 - a broken file still gets a tile
             self.canvas.create_text(self.SIZE / 2, self.SIZE / 2, text="?", fill="red")
         self.label = tk.Label(self, text=item.name, bg=PANEL, fg="#d8dde6", wraplength=self.SIZE,
@@ -178,16 +179,83 @@ class Tile(tk.Frame):
         self.label.pack(padx=4, pady=(2, 4))
         for w in (self, self.canvas, self.label):
             w.bind("<Button-1>", lambda e: on_click(self))
-            if on_remove:
-                w.bind("<Button-3>", lambda e: self._menu(e, on_remove))
-
-    def _menu(self, event, on_remove):
-        m = tk.Menu(self, tearoff=0)
-        m.add_command(label=f"Remove “{self.item.name}”", command=lambda: on_remove(self))
-        m.tk_popup(event.x_root, event.y_root)
+            w.bind("<Button-3>", lambda e: on_menu(self, e))     # right-click
+            w.bind("<Button-2>", lambda e: on_menu(self, e))     # right-click on a Mac
 
     def select(self, on):
         self.config(highlightbackground=BEAM if on else PANEL)
+
+
+class PreviewWindow(tk.Toplevel):
+    """A large, animated preview of one item. Nothing is sent to the laser."""
+    SIZE = 440
+
+    def __init__(self, app, item):
+        super().__init__(app.root, bg=PANEL)
+        self.app, self.item = app, item
+        self.title(f"Preview \u2013 {item.name}")
+        self.resizable(False, False)
+        self.canvas = tk.Canvas(self, width=self.SIZE, height=self.SIZE, bg="black", highlightthickness=0)
+        self.canvas.pack(padx=10, pady=(10, 6))
+        self.info = tk.StringVar(value="")
+        tk.Label(self, textvariable=self.info, bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9),
+                 justify="left", wraplength=self.SIZE).pack(anchor="w", padx=10)
+        buttons = tk.Frame(self, bg=PANEL)
+        buttons.pack(fill="x", padx=10, pady=10)
+        ttk.Button(buttons, text="Show on laser", command=self._show).pack(side="left")
+        ttk.Button(buttons, text="Close", command=self.close).pack(side="right")
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.bind("<Escape>", lambda e: self.close())
+        self.t0 = time.monotonic()
+        self.load_error = None
+        if not item.loaded:
+            self.info.set("Loading the whole file\u2026")
+            threading.Thread(target=self._load, daemon=True).start()
+        self._tick()
+
+    def _load(self):
+        try:
+            self.item.load()
+        except Exception as e:  # noqa: BLE001
+            self.load_error = str(e)
+
+    def _tick(self):
+        if not self.winfo_exists():
+            return
+        item = self.item
+        pts = item.frame_at(time.monotonic() - self.t0)
+        draw_points(self.canvas, pts, self.SIZE, pad=10, width=2, max_points=4000)
+        if self.load_error:
+            self.info.set(f"Couldn't read the whole file: {self.load_error}")
+        elif item.loaded:
+            rate = self.app.settings["rate"] * 1000
+            if item.generator:
+                what = "Animated picture"
+            elif len(item.frames) > 1:
+                what = f"Animation: {len(item.frames)} frames at {item.fps} frames/s"
+            else:
+                what = "Still picture"
+            lines = [what]
+            if item.kind == "file":
+                most = max(len(f) for f in item.frames)
+                lines.append(f"Up to {most:,} points per frame \u2192 the laser redraws it about "
+                             f"{rate / most:.0f} times a second at your scan speed"
+                             + (" (may flicker)" if rate / most < 20 else ""))
+            else:
+                lines.append(f"{len(pts)} corner points; the box's chip draws the lines between them")
+            self.info.set("\n".join(lines))
+        self.after(50, self._tick)
+
+    def _show(self):
+        self.app.play(self.item)
+        for t in self.app.tiles:
+            t.select(t.item is self.item)
+
+    def close(self):
+        item = self.item
+        if item is not self.app.current and item.kind == "file" and item.path and item.loaded:
+            item.frames = None   # free the memory again
+        self.destroy()
 
 
 class ScrollFrame(tk.Frame):
@@ -322,36 +390,47 @@ class App:
         right.pack(side="left", fill="both", expand=True)
         head = tk.Frame(right, bg=BG)
         head.pack(fill="x")
-        tk.Label(head, text="Click a picture to show it on the laser", bg=BG, fg="#d8dde6",
+        tk.Label(head, text="Click to show on the laser \u2022 right-click to preview", bg=BG, fg="#d8dde6",
                  font=("Segoe UI", 11, "bold")).pack(side="left")
         ttk.Button(head, text="Add laser files (.ild)…", command=self.add_files).pack(side="right")
+        ttk.Button(head, text="Add folder…", command=self.add_folder).pack(side="right", padx=6)
         self.scroll = ScrollFrame(right)
         self.scroll.pack(fill="both", expand=True, pady=(6, 0))
 
         items = patterns.builtin_items()
         self.sec_test = self._section("Test patterns")
         self.sec_pics = self._section("Pictures")
-        self.sec_files = self._section("My laser files  (right-click a file to remove it)")
+        self.sec_files = self._section("My laser files")
         for it in items:
             self._add_tile(self.sec_test if it.kind == "test" else self.sec_pics, it)
         self.empty_files = tk.Label(self.sec_files, text="No laser files yet. Use “Add laser files”.",
                                     bg=BG, fg="#8b93a1", font=("Segoe UI", 9))
+        self.folder_sections = {}
+        self.pending_tiles = []
         self._load_library_files()
+        for folder in list(self.settings["folders"]):
+            self._open_folder(folder)
 
-    def _section(self, title):
-        tk.Label(self.scroll.inner, text=title, bg=BG, fg="#8b93a1", anchor="w",
-                 font=("Segoe UI", 10, "bold")).pack(fill="x", pady=(10, 4))
+    def _section(self, title, on_remove=None):
+        head = tk.Frame(self.scroll.inner, bg=BG)
+        head.pack(fill="x", pady=(10, 4))
+        label = tk.Label(head, text=title, bg=BG, fg="#8b93a1", anchor="w", font=("Segoe UI", 10, "bold"))
+        label.pack(side="left")
+        if on_remove:
+            ttk.Button(head, text="Remove folder", command=on_remove).pack(side="right")
         frame = tk.Frame(self.scroll.inner, bg=BG)
         frame.pack(fill="x")
         frame.count = 0
+        frame.head, frame.label, frame.tiles = head, label, []
         return frame
 
     def _add_tile(self, section, item, removable=False):
-        tile = Tile(section, item, self.play_tile, self.remove_file if removable else None)
+        tile = Tile(section, item, self.play_tile, self.tile_menu)
         cols = 6
         tile.grid(row=section.count // cols, column=section.count % cols, padx=4, pady=4, sticky="n")
         section.count += 1
         self.tiles.append(tile)
+        section.tiles.append(tile)
         if removable:
             self.file_tiles.append(tile)
         return tile
@@ -380,9 +459,81 @@ class App:
         self._relayout_files()
 
     def _add_file_item(self, path):
-        item = patterns.ilda_item(path)
+        item = patterns.ilda_item(path, lazy=True)
         item.fps = self.settings["file_fps"]
         self._add_tile(self.sec_files, item, removable=True)
+
+    # -- linked folders (e.g. iShow's ILDAimage folder): files stay where they are ----------
+    def add_folder(self):
+        folder = filedialog.askdirectory(title="Choose a folder of .ild laser files")
+        if not folder:
+            return
+        folder = os.path.normpath(folder)
+        if folder in self.settings["folders"]:
+            messagebox.showinfo(APP_NAME, "That folder is already in your library.")
+            return
+        if not self._ild_files(folder):
+            messagebox.showinfo(APP_NAME, "No .ild laser files in that folder.")
+            return
+        self.settings["folders"].append(folder)
+        self._save_settings()
+        self._open_folder(folder)
+
+    @staticmethod
+    def _ild_files(folder):
+        try:
+            return sorted((n for n in os.listdir(folder) if n.lower().endswith(".ild")), key=str.lower)
+        except OSError:
+            return []
+
+    def _open_folder(self, folder):
+        names = self._ild_files(folder)
+        title = f"Folder: {os.path.basename(folder) or folder}  ({len(names)} files)"
+        if not names:
+            title += " – not found"
+        sec = self._section(title, on_remove=lambda f=folder: self.remove_folder(f))
+        self.folder_sections[folder] = sec
+        start = not self.pending_tiles
+        self.pending_tiles += [(sec, os.path.join(folder, n)) for n in names]
+        if start and self.pending_tiles:
+            self.root.after(10, self._build_pending_tiles)
+
+    def _build_pending_tiles(self):
+        """Make preview icons a few at a time so the window stays responsive."""
+        for _ in range(8):
+            if not self.pending_tiles:
+                break
+            sec, path = self.pending_tiles.pop(0)
+            if not sec.winfo_exists():
+                continue
+            try:
+                item = patterns.ilda_item(path, lazy=True)
+                item.fps = self.settings["file_fps"]
+                self._add_tile(sec, item)
+            except Exception as e:  # noqa: BLE001 - a bad file shouldn't stop the rest
+                self.log(f"Skipped {os.path.basename(path)}: {e}")
+        if self.pending_tiles:
+            self.log(f"Loading previews… {len(self.pending_tiles)} to go")
+            self.root.after(1, self._build_pending_tiles)
+        else:
+            self.log("Library ready.")
+
+    def remove_folder(self, folder):
+        if not messagebox.askyesno(APP_NAME, f"Remove the folder “{folder}” from your library?\n\n"
+                                             "(The files themselves are not deleted.)"):
+            return
+        sec = self.folder_sections.pop(folder, None)
+        if folder in self.settings["folders"]:
+            self.settings["folders"].remove(folder)
+            self._save_settings()
+        self.pending_tiles = [(s, p) for s, p in self.pending_tiles if s is not sec]
+        if sec is not None:
+            if self.current is not None and any(t.item is self.current for t in sec.tiles):
+                self.stop()
+            for t in sec.tiles:
+                self.tiles.remove(t)
+            sec.head.destroy()
+            sec.destroy()
 
     def add_files(self):
         paths = filedialog.askopenfilenames(title="Add laser files",
@@ -390,7 +541,7 @@ class App:
         added = 0
         for src in paths:
             try:
-                patterns.ilda_item(src)          # validate before copying
+                patterns.ilda_item(src, lazy=True)   # validate before copying
                 dest = os.path.join(LIBRARY_DIR, os.path.basename(src))
                 base, ext = os.path.splitext(dest)
                 n = 2
@@ -406,6 +557,15 @@ class App:
         self._relayout_files()
         if added:
             self.log(f"Added {added} laser file(s).")
+
+    def tile_menu(self, tile, event):
+        m = tk.Menu(self.root, tearoff=0)
+        m.add_command(label="Preview\u2026", command=lambda: PreviewWindow(self, tile.item))
+        m.add_command(label="Show on laser", command=lambda: self.play_tile(tile))
+        if tile in self.file_tiles:
+            m.add_separator()
+            m.add_command(label=f"Remove \u201c{tile.item.name}\u201d", command=lambda: self.remove_file(tile))
+        m.tk_popup(event.x_root, event.y_root)
 
     def remove_file(self, tile):
         if not messagebox.askyesno(APP_NAME, f"Remove “{tile.item.name}” from your laser files?"):
@@ -435,14 +595,29 @@ class App:
             t.select(t is tile)
 
     def play(self, item):
+        previous = self.current
         self.current = item
         self.current_t0 = time.monotonic()
         self.now_var.set(item.name)
+        if previous is not None and previous is not item and previous.kind == "file" and previous.path:
+            previous.frames = None          # free the memory of the file we're leaving
+        if not item.loaded:
+            self.worker.cmds.put(("stop", None))      # beam off while the file loads
+            self.log(f"Loading {item.name}…")
+            threading.Thread(target=self._load_in_background, args=(item,), daemon=True).start()
+            return
         if self.connected:
             self.worker.cmds.put(("play", item))
             self.log(f"Showing: {item.name}")
         else:
             self.log(f"Previewing {item.name}. Connect to show it on the laser.")
+
+    def _load_in_background(self, item):
+        try:
+            item.load()
+            self.events.put(("loaded", item))
+        except Exception as e:  # noqa: BLE001
+            self.events.put(("load_failed", (item, str(e))))
 
     def stop(self):
         self.current = None
@@ -509,6 +684,16 @@ class App:
         self.root.after(100, self._poll_events)
 
     def _on_event(self, kind, data):
+        if kind == "loaded":
+            if data is self.current:
+                self.play(data)
+            return
+        if kind == "load_failed":
+            item, err = data
+            if item is self.current:
+                self.stop()
+            messagebox.showerror(APP_NAME, f"Couldn't read {item.name}:\n{err}")
+            return
         if kind == "connecting":
             self.log("Connecting…")
             self.connect_btn.config(state="disabled")
