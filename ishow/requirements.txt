@@ -1,2 +1,7 @@
+# Needed to run the app (ishow_app.py) and the drivers
 pyusb>=1.2
 libusb-package>=1.0 ; platform_system == "Windows"
+
+# Optional extras (uncomment if you use them):
+# pyserial>=3.5        # only for serial_listen.py (listening on the STC's ISP header)
+# pyinstaller>=6.0     # only for build_exe.bat (making iShow Laser.exe)
