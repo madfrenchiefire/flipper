@@ -164,7 +164,7 @@ class LibraryItem:
         return self.frames[int(t * self.fps) % len(self.frames)]
 
     def preview_frame(self):
-        return self.frame_at(0.4 if self.generator else 0)
+        return self.frame_at(getattr(self, "preview_t", 0.4) if self.generator else 0)
 
 
 def static(name, strokes, kind="pattern"):

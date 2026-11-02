@@ -23,6 +23,7 @@ from tkinter import filedialog, messagebox, ttk
 import usb.core
 
 import patterns
+import shows
 from ishow_usb import IShowUSB
 
 APP_NAME = "iShow Laser"
@@ -434,6 +435,9 @@ class App:
         self.scroll.pack(fill="both", expand=True, pady=(6, 0))
 
         items = patterns.builtin_items()
+        self.sec_shows = self._section("Shows")
+        for it in shows.show_items():
+            self._add_tile(self.sec_shows, it)
         self.sec_test = self._section("Test patterns")
         self.sec_pics = self._section("Pictures")
         self.sec_files = self._section("My laser files")

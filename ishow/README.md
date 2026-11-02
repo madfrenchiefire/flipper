@@ -28,6 +28,10 @@ python ishow_app.py --demo     # try it without hardware
   laser**, and **Remove** for your own files.
 - **STOP / BLANK** (or **Esc**) turns the beam off. The firmware also blanks the beam by itself if
   the PC stops sending.
+- **Shows**: animated signs built from the laser font, `MadTown Pub` (write-on, beer mug with rising
+  bubbles, drawn frame, 3D spin, sparkles) and `Adam Ouellette` (bouncing drop-in, write-on, wave,
+  3D spin, underline and star). See `shows.py`; previews in `docs/madtown_pub.gif` and
+  `docs/adam_ouellette.gif`.
 - **On-chip line drawing** (like the original iShow firmware): pictures and text are sent as corner
   points only, and the box's chip draws the straight lines between them. That means smoother lines and
   much less USB traffic. Beam-off jumps use a bigger step than drawn lines, so jumps are quick.
