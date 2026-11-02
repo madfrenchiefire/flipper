@@ -142,8 +142,11 @@ Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resista
 | 13 | DB1 | |
 | 14 | DB0 | |
 | 6 | DACA/DACB select | lower via of the top-left pair → U1 pin 41 (PA1) |
-| 15 | CS# | |
+| 15 | CS# | tied to ground (always selected) |
 | 16 | WR# | upper via of the top-left pair → U1 pin 40 (PA0) |
+
+**Result:** the USB chip has full control of the DAC: data = port D, A/B select = PA1, WR# = PA0,
+CS# permanently enabled. Writing a value: set port D and PA1, pulse PA0 low then high.
 
 ### Step 2: colour gates (U5, 74HC08)
 | U5 pin | Signal | Goes to |
