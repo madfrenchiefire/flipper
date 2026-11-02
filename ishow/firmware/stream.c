@@ -8,9 +8,17 @@
  *   0x10 n  x y c  x y c ...   n points (n <= 170), 3 bytes each:
  *                              x, y = DAC values; c = bits for PA2..PA5
  *                              (PA2 blue, PA3 green, PA4 red, PA5 intensity)
+ *                              c bit 7 (LINE): draw a straight line from the
+ *                              current position to (x, y), interpolated on
+ *                              the chip, one step per tick (like the
+ *                              original firmware). Without it the point is
+ *                              output once, as is.
  *   0x11 k                     set rate to k thousand points per second (1..60)
+ *   0x12 k                     line step: at most k DAC units per tick (1..32)
+ *   0x13 k                     jump step: the same for blanked moves (1..64)
  *   0x08 0                     status reply on EP6 IN:
- *                              5A, rate, underruns lo, hi, points lo, mid, hi
+ *                              5A, rate, underruns lo, hi, points lo, mid, hi,
+ *                              firmware version, line step, jump step
  *
  * Points are output one per Timer2 tick. If no packet is waiting when one
  * runs out, every colour line is switched off (beam blanked) until data
@@ -44,6 +52,8 @@ __xdata __at (0xE6A5) volatile uint8_t EP6CS;
 __xdata __at (0xF000) volatile uint8_t EP2BUF[512];
 __xdata __at (0xF800) volatile uint8_t EP6BUF[512];
 
+#define FW_VERSION 2
+#define LINE_FLAG  0x80
 #define EP_EMPTY   0x04
 #define EP_FULL    0x08
 #define COLOUR_MASK 0x3C   /* PA2..PA5 */
@@ -57,6 +67,9 @@ __xdata __at (0xF800) volatile uint8_t EP6BUF[512];
  nop __endasm
 
 static uint8_t rate_k = 20;
+static uint8_t line_step = 3;
+static uint8_t jump_step = 10;
+static uint8_t cur_x = 128, cur_y = 128;
 static uint16_t underruns;
 static uint32_t points;
 
@@ -95,7 +108,40 @@ static void output_point(uint8_t x, uint8_t y, uint8_t c)
  nop __endasm;
     IOA |= 0x01;
     IOA = (IOA & ~COLOUR_MASK) | (c & COLOUR_MASK);
+    cur_x = x;
+    cur_y = y;
     points++;
+}
+
+/* Straight line from the current position to (x, y), in equal steps of at
+ * most line_step DAC units (jump_step when the beam is off), using 8.8 fixed
+ * point. Ends exactly on target. */
+static void line_to(uint8_t x, uint8_t y, uint8_t c)
+{
+    int16_t dx = (int16_t)x - cur_x;
+    int16_t dy = (int16_t)y - cur_y;
+    uint8_t adx = dx < 0 ? -dx : dx;
+    uint8_t ady = dy < 0 ? -dy : dy;
+    uint8_t m = adx > ady ? adx : ady;
+    uint8_t step = (c & COLOUR_MASK) ? line_step : jump_step;
+    uint8_t n = (uint8_t)(((uint16_t)m + step - 1) / step);
+    int32_t fx, fy, ix, iy;
+    uint8_t k;
+
+    if (n <= 1) {
+        output_point(x, y, c);
+        return;
+    }
+    fx = (int32_t)cur_x << 8;
+    fy = (int32_t)cur_y << 8;
+    ix = ((int32_t)dx << 8) / n;
+    iy = ((int32_t)dy << 8) / n;
+    for (k = 1; k < n; k++) {
+        fx += ix;
+        fy += iy;
+        output_point((uint8_t)((fx + 128) >> 8), (uint8_t)((fy + 128) >> 8), c);
+    }
+    output_point(x, y, c);
 }
 
 static void send_status(void)
@@ -109,9 +155,12 @@ static void send_status(void)
     EP6BUF[4] = points & 0xFF;
     EP6BUF[5] = (points >> 8) & 0xFF;
     EP6BUF[6] = (points >> 16) & 0xFF;
+    EP6BUF[7] = FW_VERSION;
+    EP6BUF[8] = line_step;
+    EP6BUF[9] = jump_step;
     EP6BCH = 0;
     SYNCDELAY;
-    EP6BCL = 7;
+    EP6BCL = 10;
     SYNCDELAY;
 }
 
@@ -151,11 +200,21 @@ void main(void)
             if ((uint16_t)n * 3 + 2 > len)
                 n = (len - 2) / 3;
             p = &EP2BUF[2];
-            for (i = 0; i < n; i++, p += 3)
-                output_point(p[0], p[1], p[2]);
+            for (i = 0; i < n; i++, p += 3) {
+                if (p[2] & LINE_FLAG)
+                    line_to(p[0], p[1], p[2]);
+                else
+                    output_point(p[0], p[1], p[2]);
+            }
             was_drawing = 1;
         } else if (cmd == 0x11 && len >= 2) {
             set_rate(EP2BUF[1]);
+        } else if (cmd == 0x12 && len >= 2) {
+            n = EP2BUF[1];
+            line_step = n < 1 ? 1 : n > 32 ? 32 : n;
+        } else if (cmd == 0x13 && len >= 2) {
+            n = EP2BUF[1];
+            jump_step = n < 1 ? 1 : n > 64 ? 64 : n;
         } else if (cmd == 0x08) {
             send_status();
         }

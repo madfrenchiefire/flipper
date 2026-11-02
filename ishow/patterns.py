@@ -24,8 +24,17 @@ def _is_corner(a, b, c, min_angle=35):
     return math.degrees(math.acos(cos)) > min_angle
 
 
-def strokes_to_points(strokes, color=GREEN, step=0.03, corner_dwell=3, jump_dwell=4):
+# True: send only corner points and let the box's firmware draw the lines between them
+# (like the original iShow firmware). False: the PC computes every point itself.
+ON_CHIP_LINES = True
+
+
+def strokes_to_points(strokes, color=GREEN, step=0.03, corner_dwell=3, jump_dwell=4, on_chip=None):
     """Turn polylines into a laser point list."""
+    if on_chip is None:
+        on_chip = ON_CHIP_LINES
+    if on_chip:
+        return _strokes_to_vertices(strokes, color, corner_dwell, jump_dwell)
     r, g, b = color
     pts = []
     pos = (0.0, 0.0)
@@ -52,6 +61,27 @@ def strokes_to_points(strokes, color=GREEN, step=0.03, corner_dwell=3, jump_dwel
     if not pts:
         pts = [Point(0, 0)]
     return pts
+
+
+def _strokes_to_vertices(strokes, color, corner_dwell, jump_dwell):
+    """Corner points only, flagged so the firmware draws straight lines between them."""
+    r, g, b = color
+    pts = []
+    for stroke in strokes:
+        if len(stroke) < 2:
+            continue
+        sx, sy = stroke[0]
+        pts.append(Point(sx, sy, line=True))            # blanked line (jump) to the start
+        pts += [Point(sx, sy)] * jump_dwell              # let the mirrors settle, beam off
+        pts += [Point(sx, sy, r, g, b)] * corner_dwell   # beam on at the start
+        for i in range(1, len(stroke)):
+            x1, y1 = stroke[i]
+            pts.append(Point(x1, y1, r, g, b, line=True))
+            last = i == len(stroke) - 1
+            if last or _is_corner(stroke[i - 1], stroke[i], stroke[i + 1]):
+                pts += [Point(x1, y1, r, g, b)] * corner_dwell
+        pts.append(Point(*stroke[-1]))                   # beam off before the next jump
+    return pts or [Point(0, 0)]
 
 
 # -- shapes as strokes ---------------------------------------------------------

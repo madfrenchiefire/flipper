@@ -14,10 +14,13 @@ CPUCS = 0xE600
 class FakeBox:
     is_fake = True
 
-    def __init__(self, firmware_loaded=False):
+    def __init__(self, firmware_loaded=False, version=2):
         self.running = firmware_loaded
+        self.version = version
         self.in_reset = False
         self.rate = 20
+        self.line_step, self.jump_step = 3, 10
+        self.cur = (128, 128)
         self.points = 0
         self.underruns = 0
         self.replies = []
@@ -31,6 +34,7 @@ class FakeBox:
             self.in_reset = bool(data_or_len[0] & 1)
             if not self.in_reset:
                 self.running = True
+                self.version = 2   # what firmware/stream.ihx reports
             return len(data_or_len)
         if bm == 0x40:
             return len(data_or_len)
@@ -48,14 +52,28 @@ class FakeBox:
         if cmd == 0x10:
             n = data[1]
             self.last_frame = [tuple(data[2 + 3 * i: 5 + 3 * i]) for i in range(n)]
-            self.points += n
-            time.sleep(n / (self.rate * 1000))   # the real box paces us the same way
+            drawn = 0
+            for x, y, c in self.last_frame:   # count points the way stream.c outputs them
+                if c & 0x80:
+                    step = self.line_step if c & 0x3C else self.jump_step
+                    m = max(abs(x - self.cur[0]), abs(y - self.cur[1]))
+                    drawn += max(1, (m + step - 1) // step)
+                else:
+                    drawn += 1
+                self.cur = (x, y)
+            self.points += drawn
+            time.sleep(drawn / (self.rate * 1000))   # the real box paces us the same way
         elif cmd == 0x11:
             self.rate = max(1, min(60, data[1]))
+        elif cmd == 0x12:
+            self.line_step = max(1, min(32, data[1]))
+        elif cmd == 0x13:
+            self.jump_step = max(1, min(64, data[1]))
         elif cmd == 0x08:
             p = self.points
             self.replies.append(bytes((0x5A, self.rate, self.underruns & 0xFF, self.underruns >> 8,
-                                       p & 0xFF, (p >> 8) & 0xFF, (p >> 16) & 0xFF)))
+                                       p & 0xFF, (p >> 8) & 0xFF, (p >> 16) & 0xFF,
+                                       self.version, self.line_step, self.jump_step)))
         return len(data)
 
     def read(self, ep, length, timeout=None):

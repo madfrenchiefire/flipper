@@ -168,6 +168,10 @@ LQloader.sys is Cypress's "ezloader" sample with the board's firmware embedded (
   playback.
 
 Our own firmware (`firmware/stream.c`) replaces all of this and runs on Windows 11 with WinUSB.
+Version 2 adopts the original's on-chip line drawing: a point with bit 7 of its colour byte set is
+reached by a straight line of equal steps (`0x12 k`: at most k DAC units per step while lit,
+`0x13 k`: the same for beam-off jumps, default 3 and 10). The status reply reports the firmware
+version, so the app replaces older firmware automatically.
 
 ## Test firmware note
 

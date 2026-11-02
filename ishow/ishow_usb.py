@@ -50,12 +50,15 @@ VOLTS_PER_STEP = 16.4 / 255      # measured: 0 -> -8.05 V, 255 -> +8.31 V
 
 # Colour lines (port A bits), from the board mapping in BOARD.md.
 BLUE, GREEN, RED, INTENSITY = 0x04, 0x08, 0x10, 0x20
+LINE = 0x80             # firmware draws a straight line to this point itself
+FIRMWARE_VERSION = 2    # stream.c FW_VERSION; older running firmware gets replaced
 
 
 class IShowUSB:
     def __init__(self, rate_kpps=20, limit=5.0, invert_x=False, invert_y=False, swap_xy=False,
-                 mono_green=False, device=None):
+                 mono_green=False, device=None, line_step=3, jump_step=10):
         self.rate = rate_kpps
+        self.line_step, self.jump_step = line_step, jump_step
         self.configure(limit, invert_x, invert_y, swap_xy, mono_green)
         self.device = device     # a FakeBox for demo mode; None = find the real box
         self.dev = None
@@ -86,22 +89,29 @@ class IShowUSB:
         dev.set_interface_altsetting(interface=0, alternate_setting=1)
         self.dev = dev
         self.firmware_uploaded = False
-        if force_reload or not self.firmware_running():
+        if force_reload or self.firmware_version() < FIRMWARE_VERSION:
             load(dev, read_image(FIRMWARE))
             self.firmware_uploaded = True
             time.sleep(0.3)
         self.set_rate(self.rate)
+        self.set_line_step(self.line_step)
+        self.set_jump_step(self.jump_step)
         self.status()
         return self
 
-    def firmware_running(self):
-        """True if our firmware answers a status request (a blank chip just ignores it)."""
+    def firmware_version(self):
+        """Version of our firmware if it's running, else 0 (a blank chip ignores the request)."""
         try:
             self.dev.write(EP_OUT, bytes((0x08, 0)), timeout=300)
             r = bytes(self.dev.read(EP_IN, 64, timeout=300))
-            return len(r) >= 7 and r[0] == 0x5A
         except usb.core.USBError:
-            return False
+            return 0
+        if len(r) < 7 or r[0] != 0x5A:
+            return 0
+        return r[7] if len(r) >= 9 else 1
+
+    def firmware_running(self):
+        return self.firmware_version() > 0
 
     def close(self):
         if self.dev is None:
@@ -126,12 +136,25 @@ class IShowUSB:
         self.rate = max(1, min(60, int(kpps)))
         self.dev.write(EP_OUT, bytes((0x11, self.rate)), timeout=1000)
 
+    def set_line_step(self, step):
+        """Largest move per output point when the chip draws a line (DAC units, 1-32).
+        Smaller = finer, slower lines; larger = faster drawing."""
+        self.line_step = max(1, min(32, int(step)))
+        self.dev.write(EP_OUT, bytes((0x12, self.line_step)), timeout=1000)
+
+    def set_jump_step(self, step):
+        """Like set_line_step, for blanked (beam off) moves, 1-64. Larger = quicker jumps."""
+        self.jump_step = max(1, min(64, int(step)))
+        self.dev.write(EP_OUT, bytes((0x13, self.jump_step)), timeout=1000)
+
     def status(self):
         self.dev.write(EP_OUT, bytes((0x08, 0)), timeout=1000)
         r = bytes(self.dev.read(EP_IN, 64, timeout=1000))
         if len(r) < 7 or r[0] != 0x5A:
             raise RuntimeError(f"unexpected status reply {r.hex(' ')}")
-        return {"rate": r[1], "underruns": r[2] | r[3] << 8, "points": r[4] | r[5] << 8 | r[6] << 16}
+        return {"rate": r[1], "underruns": r[2] | r[3] << 8, "points": r[4] | r[5] << 8 | r[6] << 16,
+                "version": r[7] if len(r) >= 9 else 1, "line_step": r[8] if len(r) >= 9 else 0,
+                "jump_step": r[9] if len(r) >= 10 else 0}
 
     def _scale(self, v, invert):
         v = max(-1.0, min(1.0, v))
@@ -147,6 +170,8 @@ class IShowUSB:
             c = (RED if p.r >= 0.5 else 0) | (GREEN if p.g >= 0.5 else 0) | (BLUE if p.b >= 0.5 else 0)
         if c:
             c |= INTENSITY
+        if getattr(p, "line", False):
+            c |= LINE
         return bytes((self._scale(x, self.invert_x), self._scale(y, self.invert_y), c))
 
     def send_frame(self, points):
@@ -179,6 +204,7 @@ def main():
     ap.add_argument("--seconds", type=float, default=5)
     ap.add_argument("--fps", type=float, default=30, help="frame rate for .ild playback")
     ap.add_argument("--rate", type=int, default=20, help="points per second, in thousands (1-60)")
+    ap.add_argument("--line-step", type=int, default=3, help="on-chip line step, DAC units (1-32)")
     ap.add_argument("--limit", type=float, default=5.0, help="max output voltage (default 5 = ILDA)")
     ap.add_argument("--invert-x", action="store_true")
     ap.add_argument("--invert-y", action="store_true")
@@ -187,7 +213,8 @@ def main():
     args = ap.parse_args()
 
     frames = read_ilda(args.ilda) if args.ilda else None
-    with IShowUSB(args.rate, args.limit, args.invert_x, args.invert_y, args.swap_xy) as dac:
+    with IShowUSB(args.rate, args.limit, args.invert_x, args.invert_y, args.swap_xy,
+                  line_step=args.line_step) as dac:
         print(f"iShow box ready: {dac.rate} kpps, output limited to +/-{dac.limit_volts:.1f} V")
         start = time.monotonic()
         while time.monotonic() - start < args.seconds:

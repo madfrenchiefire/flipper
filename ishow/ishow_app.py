@@ -32,10 +32,10 @@ LIBRARY_DIR = os.path.join(BASE_DIR, "laser_files")
 SETTINGS_FILE = os.path.join(BASE_DIR, "ishow_app_settings.json")
 
 DEFAULT_SETTINGS = {"rate": 20, "limit": 5.0, "invert_x": False, "invert_y": False,
-                    "swap_xy": False, "mono_green": True, "file_fps": 20}
+                    "swap_xy": False, "mono_green": True, "file_fps": 20, "line_step": 3}
 
 BG, PANEL, BEAM = "#15171c", "#1f232b", "#39ff6a"
-PREVIEW = 240   # size of the "Now showing" preview, in pixels
+PREVIEW = 205   # size of the "Now showing" preview, in pixels
 LIGHT_COLOURS = {"off": "#555a63", "ok": "#2ecc40", "warn": "#ffb000", "bad": "#ff4136"}
 
 
@@ -93,7 +93,7 @@ class LaserWorker(threading.Thread):
                     device = FakeBox()
                 dac = IShowUSB(settings["rate"], settings["limit"], settings["invert_x"],
                                settings["invert_y"], settings["swap_xy"], settings["mono_green"],
-                               device=device)
+                               device=device, line_step=settings["line_step"])
                 dac.open()
                 self.dac = dac
                 self.post("connected", {"uploaded": dac.firmware_uploaded, "demo": demo})
@@ -118,6 +118,7 @@ class LaserWorker(threading.Thread):
             self.dac.configure(s["limit"], s["invert_x"], s["invert_y"], s["swap_xy"], s["mono_green"])
             try:
                 self.dac.set_rate(s["rate"])
+                self.dac.set_line_step(s["line_step"])
             except usb.core.USBError as e:
                 self.post("error", str(e))
         return None
@@ -294,13 +295,15 @@ class App:
         self.var_rate = tk.IntVar(value=self.settings["rate"])
         self.var_limit = tk.DoubleVar(value=self.settings["limit"])
         self.var_fps = tk.IntVar(value=self.settings["file_fps"])
+        self.var_step = tk.IntVar(value=self.settings["line_step"])
         self.var_mono = tk.BooleanVar(value=self.settings["mono_green"])
         self.var_ix = tk.BooleanVar(value=self.settings["invert_x"])
         self.var_iy = tk.BooleanVar(value=self.settings["invert_y"])
         self.var_swap = tk.BooleanVar(value=self.settings["swap_xy"])
         rows = [("Scan speed (thousand points/s)", self.var_rate, 5, 40, 1),
                 ("Output limit (volts, ILDA = 5)", self.var_limit, 1.0, 8.0, 0.5),
-                ("Laser file speed (frames/s)", self.var_fps, 5, 60, 1)]
+                ("Laser file speed (frames/s)", self.var_fps, 5, 60, 1),
+                ("Line detail (1 = finest, 8 = fastest)", self.var_step, 1, 8, 1)]
         for i, (label, var, lo, hi, inc) in enumerate(rows):
             tk.Label(st, text=label, bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9)).grid(row=i, column=0, sticky="w")
             spin = ttk.Spinbox(st, from_=lo, to=hi, increment=inc, textvariable=var, width=6,
@@ -468,6 +471,7 @@ class App:
         try:
             s = {"rate": int(self.var_rate.get()), "limit": float(self.var_limit.get()),
                  "file_fps": int(self.var_fps.get()), "mono_green": bool(self.var_mono.get()),
+                 "line_step": int(self.var_step.get()),
                  "invert_x": bool(self.var_ix.get()), "invert_y": bool(self.var_iy.get()),
                  "swap_xy": bool(self.var_swap.get())}
         except (tk.TclError, ValueError):
@@ -475,6 +479,7 @@ class App:
         s["rate"] = max(5, min(40, s["rate"]))
         s["limit"] = max(1.0, min(8.0, s["limit"]))
         s["file_fps"] = max(5, min(60, s["file_fps"]))
+        s["line_step"] = max(1, min(8, s["line_step"]))
         if s["limit"] > 5.0 and self.settings["limit"] <= 5.0 and send:
             if not messagebox.askyesno(APP_NAME, "Output above 5 V is beyond the ILDA standard and can "
                                                  "overdrive the laser's mirrors.\n\nUse it anyway?"):

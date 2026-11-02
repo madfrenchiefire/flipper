@@ -33,6 +33,7 @@ class Point:
     r: float = 0.0  # 0.0 .. 1.0
     g: float = 0.0
     b: float = 0.0
+    line: bool = False  # ishow_usb: draw a straight line to here on the chip
 
     @property
     def i(self):  # intensity / blanking channel

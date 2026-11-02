@@ -19,8 +19,12 @@ python ishow_app.py --demo     # try it without hardware
   Right-click one to remove it.
 - **STOP / BLANK** (or **Esc**) turns the beam off. The firmware also blanks the beam by itself if
   the PC stops sending.
+- **On-chip line drawing** (like the original iShow firmware): pictures and text are sent as corner
+  points only, and the box's chip draws the straight lines between them. That means smoother lines and
+  much less USB traffic. Beam-off jumps use a bigger step than drawn lines, so jumps are quick.
 - **Settings**: scan speed, output limit (5 V = ILDA standard, the default), file playback speed,
-  green-only laser (on by default), mirror, flip and swap X/Y. They're saved between runs.
+  line detail (1 = finest, 8 = fastest), green-only laser (on by default), mirror, flip and swap X/Y.
+  They're saved between runs.
 
 To make a double-clickable Windows program, run `build_exe.bat` in this folder. It creates
 `dist\iShow Laser.exe`.
