@@ -177,10 +177,10 @@ CS# permanently enabled. Writing a value: set port D and PA1, pulse PA0 low then
 | 6 | gate 2 output | DB25 pin 5 (ILDA red), driven by PA4 |
 | 9 | gate 3 input A | U1 pin 43 (PA3), staircase via 3 |
 | 10 | gate 3 input B | same (buffer) |
-| 8 | gate 3 output | (DB25 pin) |
+| 8 | gate 3 output | DB25 pin 6 (ILDA green), driven by PA3 (by elimination; not yet measured) |
 | 12 | gate 4 input A | U1 pin 42 (PA2), staircase via 4 |
 | 13 | gate 4 input B | same (buffer) |
-| 11 | gate 4 output | (DB25 pin) |
+| 11 | gate 4 output | DB25 pin 7 (ILDA blue), driven by PA2 |
 
 **Result:** all four 74HC08 gates are buffers (both inputs tied), driven by PA5, PA4, PA3 and PA2. The
 four colour/blanking outputs are controlled directly by the USB chip. Still to find: which DB25 pin each
