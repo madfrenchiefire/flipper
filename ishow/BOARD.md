@@ -136,8 +136,8 @@ Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resista
 ### Step 2: colour gates (U5, 74HC08)
 | U5 pin | Signal | Goes to |
 |---|---|---|
-| 1 | gate 1 input A | |
-| 2 | gate 1 input B | |
+| 1 | gate 1 input A | U1 pin 45 (PA5), via the staircase via nearest the pins on the left |
+| 2 | gate 1 input B | same via as pin 1 (inputs tied together: gate 1 is a buffer) |
 | 3 | gate 1 output | (DB25 pin) |
 | 4 | gate 2 input A | |
 | 5 | gate 2 input B | |
