@@ -156,7 +156,8 @@ output (3, 6, 8, 11) drives, and where PA0/PA1 go (expected: DAC pins 6/15/16).
 ### Step 3: USB chip to STC (only if step 1 or 2 shows STC pins)
 | U1 pin | FX2 signal | Goes to U6 pin |
 |---|---|---|
-| 25–32 | PB0–PB7 | |
+| 25–28 | PB0–PB3 | four traces straight to the lower four pins on the STC's side facing U1 (top layer) |
+| 29–32 | PB4–PB7 | (probably the rest of the same bus; not yet checked) |
 | 36, 37, 38 | CTL0–CTL2 | |
 | 40–47 | PA0–PA7 | |
 | 8, 9 | RDY0, RDY1 | |
