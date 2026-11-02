@@ -173,6 +173,26 @@ reached by a straight line of equal steps (`0x12 k`: at most k DAC units per ste
 `0x13 k`: the same for beam-off jumps, default 3 and 10). The status reply reports the firmware
 version, so the app replaces older firmware automatically.
 
+## The original host software (iShowII_En.exe, iShow II, built 2011-05-09)
+
+A C++Builder program that talks to `ezusb.sys` through `\\.\Ezusb-N` with only three requests:
+GET_DEVICE_DESCRIPTOR (to find the box), VENDOR_REQUEST (a CPU reset: 0xA0 writes of 1, then 0, to
+0x7F92, the reset register of the older AN21xx chip) and BULK_WRITE. All drawing goes out as bulk
+writes on endpoint 2. Decoded from both ends (the program's calls and the firmware's EP2 handler at
+0x0095–0x020F):
+
+- **2-byte packet = settings**: byte 0 = delay before and after a blanked jump, byte 1 = dwell after a
+  drawn line (both feed the firmware's delay loop). These are iShow's "Blank speed" and "Scan speed".
+- **Longer packets = 4-byte records `[colour, type, X, Y]`**:
+  - colour: `0x08` red (PA4), `0x04` green (PA3), `0x02` blue (PA2). PA5 (intensity) is on if any
+    is set. This confirms the measured colour wiring.
+  - type 0 or 2: lit straight line to (X, Y), stepping 1 DAC unit at a time at full CPU speed.
+  - type 1 or 3: blank, wait, jump to (X, Y), wait, then switch the colour on.
+- X/Y are full 8-bit values (0–255), so the original could drive the full ±8.3 V range.
+- Endpoint 4 data is passed to the STC over port B (PA6/PA7 handshake). The drawing doesn't use it.
+
+The resources hold only UI forms and bitmaps. There's no built-in pattern library in the .exe.
+
 ## Test firmware note
 
 The first test program (pinwiggle) used the FX2's 0xA0 memory request while the 8051 was running.
