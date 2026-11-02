@@ -10,6 +10,11 @@ python ishow_app.py            # with the box plugged in (WinUSB installed with 
 python ishow_app.py --demo     # try it without hardware
 ```
 
+- **Install driver** (Windows, once per PC): installs Windows' own WinUSB driver for the box, with
+  no Zadig needed. Approve the Windows prompt, then unplug and replug the box. It uses only built-in
+  Windows tools (`winusb_install.py`): an .inf for USB 3333:6666, a catalog made with Windows' catalog
+  API, signed with a certificate trusted only on that PC (its private key is deleted right after),
+  then `pnputil`. Zadig still works as a fallback.
 - **Connect** finds the box and uploads our firmware only if it isn't already running.
 - **Status lights**: *USB box* (found), *Firmware* (running), *Responding* (the box answered within
   the last 2.5 s). The line next to them shows the scan rate, points sent and any gaps.
@@ -49,7 +54,8 @@ the box's Cypress FX2 chip over USB and streams points to it. Nothing on the box
 permanently: unplugging it clears our firmware.
 
 1. `python -m pip install pyusb libusb-package`
-2. Zadig → Options → List All Devices → **Unknown device (3333 6666)** → **WinUSB** → Install Driver.
+2. In the app press **Install driver** (or: Zadig → Options → List All Devices → **Unknown device
+   (3333 6666)** → **WinUSB** → Install Driver).
 3. Laser **disconnected** first, then check the output with a multimeter (DB25 pin 1 = X, pin 2 = Y,
    pin 25 = ground):
    `python ishow_usb.py --test-range` (blanked corner tour; X/Y should reach about ±5 V).
@@ -147,6 +153,7 @@ are the route for this USB board. The data format above is still the best guess 
 | `ishow_app.py` | **The desktop app** (Connect, status lights, text, pictures, .ild files) |
 | `patterns.py`, `laser_font.py` | Built-in pictures/test patterns and the single-stroke laser font |
 | `fake_usb_box.py` | Simulated box used by `ishow_app.py --demo` |
+| `winusb_install.py` | The **Install driver** button's installer (WinUSB for 3333:6666, no Zadig) |
 | `ishow_usb.py` + `firmware/stream.c` | **The working driver**: streams points to the box with our own FX2 firmware |
 | `fx2pins.py` + `firmware/pinctl.c` | Loads a small test program into the FX2 and lets you drive the DAC and port A/D pins by hand over USB |
 | `serial_listen.py` | Listens (read-only) to the STC chip's serial output on the ISP header |

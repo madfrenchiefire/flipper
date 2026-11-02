@@ -11,10 +11,12 @@ laser. STOP (or the Esc key) blanks the beam.
 """
 import argparse
 import json
+import subprocess
 import os
 import queue
 import shutil
 import sys
+import tempfile
 import threading
 import time
 import tkinter as tk
@@ -368,6 +370,10 @@ class App:
         self.light_link = Light(bar, "Responding")
         for lt in (self.light_usb, self.light_fw, self.light_link):
             lt.pack(side="left")
+        self.driver_btn = ttk.Button(bar, text="Install driver", command=self.install_driver)
+        self.driver_btn.pack(side="left", padx=(0, 10))
+        if os.name != "nt":
+            self.driver_btn.config(state="disabled")
         self.info_var = tk.StringVar(value="")
         tk.Label(bar, textvariable=self.info_var, bg=PANEL, fg="#8b93a1",
                  font=("Segoe UI", 9)).pack(side="left", padx=10)
@@ -692,6 +698,47 @@ class App:
         else:
             self.log(f"Previewing {item.name}. Connect to show it on the laser.")
 
+    # -- driver install (Windows) ------------------------------------------------------------
+    def install_driver(self):
+        if not messagebox.askokcancel(APP_NAME,
+                "This installs Windows' own WinUSB driver for the laser box (USB 3333:6666), "
+                "the same thing Zadig does.\n\n"
+                "Windows will ask for permission. A certificate that is trusted only on this PC "
+                "is created to approve the driver; its private key is deleted straight away.\n\n"
+                "Continue?"):
+            return
+        self.driver_btn.config(state="disabled")
+        self.log("Installing the driver\u2026 (approve the Windows prompt)")
+        threading.Thread(target=self._run_driver_install, daemon=True).start()
+
+    def _run_driver_install(self):
+        log = os.path.join(tempfile.gettempdir(), "ishow_driver_install.log")
+        try:
+            os.remove(log)
+        except OSError:
+            pass
+        if getattr(sys, "frozen", False):
+            exe, args = sys.executable, ["--install-driver", "--log", log]
+        else:
+            script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "winusb_install.py")
+            exe, args = sys.executable, [script, "--install", "--log", log]
+        arglist = " ".join(f'"{a}"' if " " in a else a for a in args).replace("'", "''")
+        ps = (f"Start-Process -FilePath '{exe}' -ArgumentList '{arglist}' "
+              "-Verb RunAs -Wait -WindowStyle Hidden")
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        try:
+            with open(log, encoding="utf-8") as f:
+                text = f.read()
+        except OSError:
+            text = ""
+        if r.returncode != 0 and not text:
+            self.events.put(("driver", (False, "Cancelled, or Windows didn't allow it.\n" + r.stderr.strip()[-400:])))
+        elif "RESULT: OK" in text:
+            self.events.put(("driver", (True, text)))
+        else:
+            self.events.put(("driver", (False, text[-1500:] or "No result was reported.")))
+
     def _load_in_background(self, item):
         try:
             item.load()
@@ -764,6 +811,19 @@ class App:
         self.root.after(100, self._poll_events)
 
     def _on_event(self, kind, data):
+        if kind == "driver":
+            ok, text = data
+            self.driver_btn.config(state="normal")
+            if ok:
+                self.log("Driver installed.")
+                messagebox.showinfo(APP_NAME, "Driver installed.\n\nUnplug the laser box, plug it back in, "
+                                              "then press Connect.")
+            else:
+                self.log("Driver install failed.")
+                messagebox.showerror(APP_NAME, "The driver install didn't work:\n\n" + text +
+                                     "\n\nYou can still install it the old way with Zadig "
+                                     "(WinUSB for Unknown device 3333 6666).")
+            return
         if kind == "loaded":
             if data is self.current:
                 self.play(data)
@@ -849,6 +909,11 @@ class App:
 
 
 def main():
+    if "--install-driver" in sys.argv:          # the .exe re-runs itself elevated for this
+        import winusb_install
+        sys.argv = [sys.argv[0], "--install"] + [a for a in sys.argv[1:] if a != "--install-driver"]
+        winusb_install.main()
+        return
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--demo", action="store_true", help="use a simulated box (no hardware needed)")
     args = ap.parse_args()

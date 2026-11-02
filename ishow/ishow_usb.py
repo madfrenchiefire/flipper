@@ -79,7 +79,8 @@ class IShowUSB:
         """Connect. Uploads the firmware only if it isn't already running."""
         dev = self.device or usb.core.find(idVendor=0x3333, idProduct=0x6666, backend=backend())
         if dev is None:
-            raise RuntimeError("iShow box (3333:6666) not found. Is it plugged in, with WinUSB (Zadig)?")
+            raise RuntimeError("iShow box (3333:6666) not found. Is it plugged in? On a new PC, press "
+                               "'Install driver' first (or install WinUSB with Zadig).")
         if not getattr(dev, "is_fake", False):
             try:
                 dev.set_configuration()
