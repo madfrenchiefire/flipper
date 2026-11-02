@@ -163,9 +163,20 @@ LQloader.sys is Cypress's "ezloader" sample with the board's firmware embedded (
 - Between points it **interpolates on the chip** (Bresenham-style, one DAC step at a time toward the
   next target), so the PC only sends corner points.
 - Timer 0 is a tick counter; after about 15 ticks without data it calls the blank routine (beam off).
-- Port B is a data bus to the STC with **PA6/PA7 as handshake lines** (routines at 0x0280–0x02E3 and
-  0x06E0–0x07AB). The STC isn't involved in drawing. It most likely handles the RJ45 link or standalone
-  playback.
+- Port B is a data bus to the STC with **PA6/PA7 as handshake lines**. **The STC is a copy-protection
+  chip (a dongle).** The routine at 0x06C7 is a state machine, stepped by PA6/PA7 with Timer 0 delays:
+  1. Read two ID bytes from the STC and expect `E7 A6`.
+  2. Take a challenge byte b from the host (the first byte of an EP2/EP4 packet), write it to the STC,
+     and read back the reply, which must equal `~(2*b) & 0xFF`.
+  3. Only then set the "unlocked" flag (bit 0x05). The EP2 drawing handler (0x0104) and the EP4 path
+     (0x0276) do nothing until it is set.
+  After unlocking, EP4 packets are passed to the STC byte by byte (0x0282–0x02F4: a 2-byte packet
+  is a command byte; longer ones are [?, count, data...] with PA6 toggled as the strobe). Nothing in
+  iShow II shows a user-visible feature on that path. **Our firmware doesn't use the STC at all**, so it
+  can be reprogrammed freely.
+- iShow II's "Download file to the light's internal memory" tool (TFORM7: COM1–5, *.bin) is for
+  projectors with their own serial port and show memory, not this board. TFORM19 is a multi-box
+  selector (Usb-0…Usb-99, "Master device", "Enable multiple device").
 
 Our own firmware (`firmware/stream.c`) replaces all of this and runs on Windows 11 with WinUSB.
 Version 2 adopts the original's on-chip line drawing: a point with bit 7 of its colour byte set is
