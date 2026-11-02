@@ -119,8 +119,11 @@ program apparently doesn't use its serial port; the header is for factory progra
 
 `dac a 0 / 128 / 255` on DB25 pin 1 (against pin 25): **−8.05 V / 0 V / +8.31 V**. The FX2 is driving the
 DAC and the output stage works. Gain ≈ 0.064 V per step, centred on 128. That's well beyond ILDA's
-±5 V, so software must limit values to about **50–206** for ±5 V. Open question: the status read-back
-showed PA1 (A/B select) reading 1 even when driven 0, so it's not yet known which channel this was.
+±5 V, so software must limit values to about **50–206** for ±5 V.
+
+`dac b 0 / 255` on DB25 pin 2: **−8.02 V / +8.58 V**. So **DAC channel A = X (DB25 pin 1)** and
+**channel B = Y (DB25 pin 2)**, and the A/B select on PA1 works. (The status read-back showing PA1 = 1
+while driven low is a read-back quirk, not a wiring fault.)
 
 ## Test firmware note
 
