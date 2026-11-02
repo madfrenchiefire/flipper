@@ -141,7 +141,7 @@ Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resista
 | 12 | DB2 | |
 | 13 | DB1 | |
 | 14 | DB0 | |
-| 6 | DACA/DACB select | |
+| 6 | DACA/DACB select | lower via of the top-left pair → U1 pin 41 (PA1) |
 | 15 | CS# | |
 | 16 | WR# | |
 
