@@ -33,7 +33,26 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "ishow_app_settings.json")
 
 DEFAULT_SETTINGS = {"rate": 20, "limit": 5.0, "invert_x": False, "invert_y": False,
                     "swap_xy": False, "mono_green": True, "file_fps": 20, "line_step": 3,
-                    "folders": []}
+                    "folders": [], "removed_folders": []}
+
+# Where the original iShow II content can be: first the project's own copy (ishow_content, next to
+# this app or the .exe), then an unpacked or installed iShow II. Found folders are linked automatically.
+CONTENT_DIR = os.path.join(BASE_DIR, "ishow_content")
+ISHOW_HOMES = [CONTENT_DIR, r"C:\iShowII_EN", r"C:\iShowII", r"C:\iShow",
+               r"C:\Program Files\iShowII_EN", r"C:\Program Files (x86)\iShowII_EN",
+               r"C:\Program Files\iShowII", r"C:\Program Files (x86)\iShowII",
+               r"C:\Program Files\iShow", r"C:\Program Files (x86)\iShow"]
+
+
+def find_ishow_folders():
+    """iShow II content folders that hold .ild files (ILDAimage), from the usual locations."""
+    found = []
+    for home in ISHOW_HOMES:
+        for sub in ("ILDAimage", "ILDA", "Ilda"):
+            folder = os.path.join(home, sub)
+            if os.path.isdir(folder) and folder not in found:
+                found.append(folder)
+    return found
 
 BG, PANEL, BEAM = "#15171c", "#1f232b", "#39ff6a"
 PREVIEW = 205   # size of the "Now showing" preview, in pixels
@@ -408,6 +427,7 @@ class App:
         self.folder_sections = {}
         self.pending_tiles = []
         self._load_library_files()
+        self._auto_link_ishow()
         for folder in list(self.settings["folders"]):
             self._open_folder(folder)
 
@@ -472,12 +492,27 @@ class App:
         if folder in self.settings["folders"]:
             messagebox.showinfo(APP_NAME, "That folder is already in your library.")
             return
+        if folder in self.settings["removed_folders"]:
+            self.settings["removed_folders"].remove(folder)
         if not self._ild_files(folder):
             messagebox.showinfo(APP_NAME, "No .ild laser files in that folder.")
             return
         self.settings["folders"].append(folder)
         self._save_settings()
         self._open_folder(folder)
+
+    def _auto_link_ishow(self):
+        """Link the original iShow II's laser files automatically, every start, unless the user
+        removed that folder."""
+        skip = set(self.settings["folders"]) | set(self.settings["removed_folders"])
+        new = [f for f in find_ishow_folders() if f not in skip and self._ild_files(f)]
+        if not new:
+            return
+        self.settings["folders"] += new
+        self._save_settings()
+        if new:
+            self.root.after(500, lambda: self.log("Found the original iShow II laser files and added them: "
+                                                  + ", ".join(new)))
 
     @staticmethod
     def _ild_files(folder):
@@ -525,7 +560,9 @@ class App:
         sec = self.folder_sections.pop(folder, None)
         if folder in self.settings["folders"]:
             self.settings["folders"].remove(folder)
-            self._save_settings()
+        if folder not in self.settings["removed_folders"]:
+            self.settings["removed_folders"].append(folder)
+        self._save_settings()
         self.pending_tiles = [(s, p) for s, p in self.pending_tiles if s is not sec]
         if sec is not None:
             if self.current is not None and any(t.item is self.current for t in sec.tiles):

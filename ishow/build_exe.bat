@@ -4,6 +4,7 @@ python -m pip install --upgrade pyinstaller pyusb libusb-package
 python -m PyInstaller --noconfirm --onefile --windowed --name "iShow Laser" ^
   --add-data "firmware;firmware" --collect-all libusb_package ^
   --hidden-import fake_usb_box --hidden-import ilda ishow_app.py
+if exist ishow_content xcopy /E /I /Y /Q ishow_content "dist\ishow_content" >nul
 echo.
 echo Done: dist\iShow Laser.exe
 echo Your imported laser files are kept in a "laser_files" folder next to the .exe.
