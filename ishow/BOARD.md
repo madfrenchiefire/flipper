@@ -174,7 +174,7 @@ CS# permanently enabled. Writing a value: set port D and PA1, pulse PA0 low then
 | 3 | gate 1 output | DB25 pin 3 (ILDA intensity/blanking): PA5 = 1 gives +4.1 V, PA5 = 0 gives 0 V |
 | 4 | gate 2 input A | U1 pin 44 (PA4), staircase via 2 |
 | 5 | gate 2 input B | same (buffer) |
-| 6 | gate 2 output | (DB25 pin) |
+| 6 | gate 2 output | DB25 pin 5 (ILDA red), driven by PA4 |
 | 9 | gate 3 input A | U1 pin 43 (PA3), staircase via 3 |
 | 10 | gate 3 input B | same (buffer) |
 | 8 | gate 3 output | (DB25 pin) |
