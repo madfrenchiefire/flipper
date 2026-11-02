@@ -62,6 +62,21 @@ corner pin on the DAC side, nearest the DAC. The crystal (pins 11/12), USB (15/1
   WR#) aren't clear in the photos. The rest of U1's DAC side (port A, CTL) also goes into vias. The
   back side of the board will show where those go.
 
+### The six vias above U1 (microscope photo, pin positions measured)
+
+With U1's text reading normally, pin 1 is bottom-left and the top row runs pin 56 (left) to pin 29
+(right). Measuring each pad's position and following the traces:
+
+| Via | Goes to U1 pin | FX2 signal |
+|---|---|---|
+| top-left pair (2 vias) | 40, 41 | PA0, PA1 |
+| diagonal staircase (4 vias) | 42, 43, 44, 45 | PA2, PA3, PA4, PA5 |
+
+So **six port A pins (PA0–PA5) leave through these vias**. Six is exactly what's still missing:
+3 DAC controls (pin 6 A/B select, 15 CS#, 16 WR#) plus the colour inputs. The back-side bundle from
+the 74HC08 area ends at this staircase. Pins 46/47 (PA6/PA7) show no trace. The via with a cross-shaped
+thermal relief next to pins 33/34 is a ground/power stitch, not a signal.
+
 ### Back of the board (photo, tentative)
 
 Positions are mirrored from the top side. Two bundles of traces stand out:

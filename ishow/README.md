@@ -74,6 +74,7 @@ are the route for this USB board. The data format above is still the best guess 
 | `ishow_net.py` | **The decoded iShow 2.3 protocol** (TCP 192.168.1.172:4000) |
 | `fake_box.py` | Simulated box for testing `ishow_net.py` without hardware |
 | `fx2load.py` | Loads a program into the box's FX2 chip (RAM only; unplugging undoes it) |
+| `fx2pins.py` + `firmware/pinwiggle.asm` | Loads a 32-byte test program into the FX2 and lets you set port A/D pins by hand |
 | `serial_listen.py` | Listens (read-only) to the STC chip's serial output on the ISP header |
 | `ilda.py` | Reads `.ild` files (formats 0, 1, 2, 4, 5) |
 
