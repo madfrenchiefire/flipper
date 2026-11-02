@@ -143,7 +143,7 @@ Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resista
 | 14 | DB0 | |
 | 6 | DACA/DACB select | lower via of the top-left pair → U1 pin 41 (PA1) |
 | 15 | CS# | |
-| 16 | WR# | |
+| 16 | WR# | upper via of the top-left pair → U1 pin 40 (PA0) |
 
 ### Step 2: colour gates (U5, 74HC08)
 | U5 pin | Signal | Goes to |

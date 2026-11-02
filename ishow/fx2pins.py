@@ -13,6 +13,8 @@ Commands at the prompt:
     a 3 1          drive PA3 high   (a <bit 0-7> <0|1>)
     a 3 off        release PA3
     a off          release all of port A
+    dac a 200      write 200 to DAC channel A (PA1 low), then pulse WR (PA0)
+    dac b 50       write 50 to DAC channel B (PA1 high)
     s              show status (pin read-back and heartbeat)
     q              release everything and quit
 
@@ -60,6 +62,19 @@ class Pins:
             self.ioa = (self.ioa | mask) if value else (self.ioa & ~mask)
         self._write()
 
+    def dac_write(self, channel, value):
+        """TLC7528: PA1 = DACA/DACB select (low = A), PA0 = WR# (active low).
+        Each step is its own USB transfer, so the order on the pins is guaranteed."""
+        self.oea |= 0x03
+        self.ioa |= 0x01  # WR# high (idle)
+        self.ioa = (self.ioa | 0x02) if channel == "b" else (self.ioa & ~0x02)
+        self.oed, self.iod = 0xFF, value & 0xFF
+        self._write()      # data + channel set up, WR# still high
+        self.ioa &= ~0x01
+        self._write()      # WR# low: the DAC takes the value
+        self.ioa |= 0x01
+        self._write()      # WR# high: value latched
+
     def release_all(self):
         self.oea = self.oed = 0
         self._write()
@@ -99,6 +114,9 @@ def main():
                     st = pins.status()
                     print(f"  port A reads {st['port_a']:08b} (PA7..PA0), port D reads "
                           f"{st['port_d']:3d} = {st['port_d']:08b}, heartbeat {st['heartbeat']}")
+                elif cmd == "dac" and len(parts) == 3 and parts[1] in ("a", "b"):
+                    pins.dac_write(parts[1], int(parts[2], 0))
+                    print(f"  DAC {parts[1].upper()} = {int(parts[2], 0)}")
                 elif cmd == "d" and len(parts) == 2:
                     pins.port_d(None if parts[1] == "off" else int(parts[1], 0))
                     print("  port D", "released" if parts[1] == "off" else f"= {int(parts[1], 0)}")
