@@ -57,6 +57,10 @@ with `stcgal`) erases the STC's existing program permanently, because STC flash 
 Listening only (adapter GND to G, adapter RX to T) is safe. Never connect V while the board is
 powered from USB.
 
+The header sits next to the STC and its own 24 MHz crystal (X2_B). The silkscreen says
+"STC89C52"; the fitted part is the pin-compatible STC90C52RC. On the 44-pin package, R and T
+should go to STC pin 5 (P3.0/RXD) and pin 7 (P3.1/TXD). Count from the dot, anticlockwise.
+
 ## Multimeter results
 
 | From | To | Result |
