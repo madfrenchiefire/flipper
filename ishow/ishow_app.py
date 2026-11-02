@@ -26,6 +26,7 @@ from tkinter import filedialog, messagebox, ttk
 import usb.core
 
 import patterns
+import ishow_sections
 import shows
 from ishow_usb import IShowUSB
 
@@ -64,6 +65,20 @@ def find_ishow_folders():
                 found.append(folder)
                 seen.add(sub)
     return found
+
+
+def find_ishow_sections():
+    """iShow II Sections (.sec, the original software's shows) and the Effect folder they use,
+    from the first location that has any."""
+    for home in ISHOW_HOMES:
+        folder = os.path.join(home, "Section")
+        try:
+            names = sorted(n for n in os.listdir(folder) if n.lower().endswith(".sec"))
+        except OSError:
+            continue
+        if names:
+            return [os.path.join(folder, n) for n in names], os.path.join(home, "Effect")
+    return [], None
 
 
 def folder_title(folder):
@@ -301,7 +316,14 @@ class PreviewWindow(tk.Toplevel):
             self.info.set(f"Couldn't read the whole file: {self.load_error}")
         elif item.loaded:
             rate = self.app.settings["rate"] * 1000
-            if item.generator:
+            if getattr(item, "section", None):
+                sec = item.section
+                i, left = sec.step_at(time.monotonic() - self.t0)
+                fx = sec.effect_names[i]
+                what = (f"iShow II section: {len(sec.steps)} steps over {len(sec.pictures)} pictures, "
+                        f"{sec.length:.0f} s per loop\nStep {i + 1}: picture {sec.steps[i][0] + 1}"
+                        + (f", effect \u201c{fx}\u201d" if fx else "") + f" \u2022 next in {left:.0f} s")
+            elif item.generator:
                 what = "Animated picture"
             elif len(item.frames) > 1:
                 what = (f"{len(item.frames)} frames, {_num(1 / item.fps)} seconds each" if item.fps < 1
@@ -564,6 +586,12 @@ class App:
         self.sec_shows = self._section("Shows")
         for it in shows.show_items():
             self._add_tile(self.sec_shows, it)
+        sec_paths, effect_folder = find_ishow_sections()
+        for path in sec_paths:                      # the original iShow II shows
+            try:
+                self._add_tile(self.sec_shows, ishow_sections.section_item(path, effect_folder))
+            except Exception as e:  # noqa: BLE001
+                self.log(f"Skipped section {os.path.basename(path)}: {e}")
         self.sec_test = self._section("Test patterns")
         self.sec_pics = self._section("Pictures")
         self.sec_files = self._section("My laser files")

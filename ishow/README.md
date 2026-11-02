@@ -46,7 +46,11 @@ python ishow_app.py --demo     # try it without hardware
 - **Shows**: animated signs built from the laser font, `MadTown Pub` (write-on, beer mug with rising
   bubbles, drawn frame, 3D spin, sparkles) and `Adam Ouellette` (bouncing drop-in, write-on, wave,
   3D spin, underline and star). See `shows.py`; previews in `docs/madtown_pub.gif` and
-  `docs/adam_ouellette.gif`.
+  `docs/adam_ouellette.gif`. The original iShow II **Sections** (`ishow_content/Section/*.sec`:
+  Animal, Beam, BeamShow, Chinese Zodiac, Geometry, Point_Array, Wave) are added here too and play
+  like they did in iShow II: each step shows one picture for its set time with its motion effect
+  (move, 3D turn, stretch, rotate, zoom, slow draw, colour). Right-click → Preview shows the current
+  step and effect. See `ishow_sections.py` for how the effect values are read.
 - **On-chip line drawing** (like the original iShow firmware): pictures and text are sent as corner
   points only, and the box's chip draws the straight lines between them. That means smoother lines and
   much less USB traffic. Beam-off jumps use a bigger step than drawn lines, so jumps are quick.
@@ -168,6 +172,7 @@ are the route for this USB board. The data format above is still the best guess 
 | `fx2pins.py` + `firmware/pinctl.c` | Loads a small test program into the FX2 and lets you drive the DAC and port A/D pins by hand over USB |
 | `serial_listen.py` | Listens (read-only) to the STC chip's serial output on the ISP header |
 | `ilda.py` | Reads `.ild` files (formats 0, 1, 2, 4, 5) |
+| `ishow_sections.py` | Plays iShow II Sections (`.sec`): steps, timing and motion effects |
 
 ```
 pip install -r requirements.txt

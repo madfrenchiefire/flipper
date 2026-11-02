@@ -291,8 +291,12 @@ def preview_segments(points, max_points=1500):
     Very dense frames are thinned to keep previews quick to draw."""
     if len(points) > max_points:
         points = points[:: len(points) // max_points + 1]
-    segs = []
+    segs, on_line = [], set()
     for a, b in zip(points, points[1:]):
         if max(b.r, b.g, b.b) >= 0.5 and (a.x, a.y) != (b.x, b.y):
             segs.append((a.x, a.y, b.x, b.y))
+            on_line.update(((a.x, a.y), (b.x, b.y)))
+    # lit spots that aren't part of any line (laser dots, e.g. "point array" pictures): a tiny mark
+    dots = {(p.x, p.y) for p in points if max(p.r, p.g, p.b) >= 0.5} - on_line
+    segs += [(x - 0.012, y, x + 0.012, y) for x, y in dots]
     return segs
