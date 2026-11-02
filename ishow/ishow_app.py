@@ -234,6 +234,14 @@ class Tile(tk.Frame):
         self.config(highlightbackground=BEAM if on else PANEL)
 
 
+FPS, SPF = "frames per second", "seconds per frame"
+
+
+def _num(v):
+    """1.0 -> '1', 0.25 -> '0.25'"""
+    return f"{v:.2f}".rstrip("0").rstrip(".")
+
+
 class PreviewWindow(tk.Toplevel):
     """A large, animated preview of one item. Nothing is sent to the laser."""
     SIZE = 440
@@ -274,8 +282,16 @@ class PreviewWindow(tk.Toplevel):
         if not self.winfo_exists():
             return
         item = self.item
-        pts, self.last_key, delay = item.frame_due(time.monotonic() - self.t0, self.last_key)
+        t = time.monotonic() - self.t0
+        pts, self.last_key, delay = item.frame_due(t, self.last_key)
         self.after(delay, self._tick)
+        if self.speed_row is not None and item.frames:
+            n, per = len(item.frames), 1 / item.fps
+            i = int(t * item.fps)
+            text = f"Frame {i % n + 1} of {n}"
+            if per >= 2:
+                text += f" • next in {max(0, (i + 1) * per - t):.0f} s"
+            self.frame_var.set(text)
         if pts is None:          # same frame as last time: nothing to redraw
             return
         draw_points(self.canvas, pts, self.SIZE, pad=10, width=2, max_points=4000)
@@ -288,7 +304,8 @@ class PreviewWindow(tk.Toplevel):
             if item.generator:
                 what = "Animated picture"
             elif len(item.frames) > 1:
-                what = f"Animation: {len(item.frames)} frames at {item.fps} frames/s"
+                what = (f"{len(item.frames)} frames, {_num(1 / item.fps)} seconds each" if item.fps < 1
+                        else f"Animation: {len(item.frames)} frames at {_num(item.fps)} frames/s")
             else:
                 what = "Still picture"
             lines = [what]
@@ -302,37 +319,78 @@ class PreviewWindow(tk.Toplevel):
             self.info.set("\n".join(lines))
 
     def _add_speed_row(self):
-        """A speed slider for multi-frame files, remembered per file (also used on the laser)."""
+        """Speed for multi-frame files, as frames per second or seconds per frame (for files that
+        are really a set of separate pictures). Remembered per file and used on the laser too."""
         row = tk.Frame(self, bg=PANEL)
         row.pack(fill="x", padx=10, before=self.buttons)
         tk.Label(row, text="Speed", bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9)).pack(side="left")
-        self.speed_var = tk.IntVar(value=int(self.item.fps))
-        value = tk.Label(row, width=12, anchor="w", bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9))
-
-        def changed(_=None):
-            fps = max(1, int(float(self.speed_var.get())))
-            if fps != self.item.fps:
-                # keep the animation where it is instead of jumping to another frame
-                now = time.monotonic()
-                self.t0 = now - (now - self.t0) * self.item.fps / fps
-                self.item.fps = fps
-                self.last_key = None
-            value.config(text=f"{fps} frames/s")
-        scale = ttk.Scale(row, from_=1, to=40, variable=self.speed_var, command=changed, length=230)
-        scale.pack(side="left", padx=8)
-        scale.bind("<ButtonRelease-1>", lambda e: self._save_speed())
-        value.pack(side="left")
-        ttk.Button(row, text="Default", command=lambda: (self.speed_var.set(self.app.default_fps(self.item.path)),
-                                                         changed(), self._save_speed(reset=True))
-                   ).pack(side="right")
-        changed()
+        self.speed_var = tk.StringVar()
+        self.unit_var = tk.StringVar(value=SPF if self.item.fps < 1 else FPS)
+        spin = ttk.Spinbox(row, textvariable=self.speed_var, width=6, command=self._speed_changed)
+        spin.pack(side="left", padx=(6, 4))
+        unit = ttk.Combobox(row, textvariable=self.unit_var, values=[FPS, SPF], state="readonly", width=17)
+        unit.pack(side="left")
+        for ev in ("<Return>", "<FocusOut>"):
+            spin.bind(ev, lambda e: self._speed_changed())
+        unit.bind("<<ComboboxSelected>>", lambda e: self._show_speed())
+        ttk.Button(row, text="Default", command=self._default_speed).pack(side="right")
+        self.spin = spin
+        self.frame_var = tk.StringVar()
+        row2 = tk.Frame(self, bg=PANEL)
+        row2.pack(fill="x", padx=10, pady=(4, 0), before=self.buttons)
+        tk.Label(row2, textvariable=self.frame_var, bg=PANEL, fg="#8b93a1", font=("Segoe UI", 9),
+                 anchor="w").pack(side="left")
+        folder = os.path.dirname(self.item.path or "")
+        if folder in self.app.folder_sections:
+            ttk.Button(row2, text="Use this speed for the whole folder",
+                       command=lambda: self.app.set_folder_speed(folder, self.item.fps)).pack(side="right")
         self.speed_row = row
+        self._show_speed()
+
+    def _show_speed(self):
+        """Put the item's current speed in the box, in the chosen unit."""
+        fps = self.item.fps
+        if self.unit_var.get() == SPF:
+            self.spin.config(from_=0.5, to=600, increment=1)
+            self.speed_var.set(_num(1 / fps))
+        else:
+            self.spin.config(from_=1, to=60, increment=1)
+            self.speed_var.set(_num(fps))
+
+    def _speed_changed(self):
+        try:
+            v = float(self.speed_var.get())
+        except ValueError:
+            self._show_speed()
+            return
+        if self.unit_var.get() == SPF:
+            fps = 1 / min(600.0, max(0.1, v))
+        else:
+            fps = min(60.0, max(0.1, v))
+        self._set_fps(fps)
+        self._save_speed()
+
+    def _default_speed(self):
+        self._set_fps(self.app.default_fps(self.item.path))
+        self.unit_var.set(FPS)
+        self._show_speed()
+        self._save_speed(reset=True)
+
+    def _set_fps(self, fps):
+        fps = round(fps, 6)
+        if fps != self.item.fps:
+            # keep showing the same frame instead of jumping to another one
+            now = time.monotonic()
+            self.t0 = now - (now - self.t0) * self.item.fps / fps
+            self.item.fps = fps
+            self.last_key = None
 
     def _save_speed(self, reset=False):
         if self.item.path and self.winfo_exists():
             self.app.set_file_speed(self.item.path, None if reset else self.item.fps)
 
     def _show(self):
+        self.t0, self.last_key = time.monotonic(), None    # start in step with the laser
         self.app.play(self.item)
         for t in self.app.tiles:
             t.select(t.item is self.item)
@@ -582,8 +640,24 @@ class App:
         if fps is None or fps == self.default_fps(path):
             speeds.pop(path, None)
         else:
-            speeds[path] = int(fps)
+            speeds[path] = round(float(fps), 6)
         self._save_settings()
+
+    def set_folder_speed(self, folder, fps):
+        """Give every multi-frame file in a linked folder the same speed (e.g. 30 s per frame)."""
+        sec = self.folder_sections.get(folder)
+        if sec is None:
+            return
+        for path in sec.paths:
+            if fps == self.default_fps(path):
+                self.settings["file_speeds"].pop(path, None)
+            else:
+                self.settings["file_speeds"][path] = round(float(fps), 6)
+        for t in sec.tiles:
+            t.item.fps = self.fps_for(t.item.path)
+        self._save_settings()
+        each = f"{_num(1 / fps)} seconds per frame" if fps < 1 else f"{_num(fps)} frames per second"
+        self.log(f"{folder_title(folder)}: all {len(sec.paths)} files now play at {each}.")
 
     def _add_file_item(self, path):
         item = patterns.file_item(path, lazy=True)

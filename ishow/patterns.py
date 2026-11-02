@@ -170,7 +170,8 @@ class LibraryItem:
             return (None if key == last_key else frames[0]), key, 200
         i = int(t * self.fps)
         key = (id(frames), i % len(frames))
-        delay = max(5, int(((i + 1) / self.fps - t) * 1000) + 2)
+        # at most 250 ms, so a speed change is noticed quickly even with 30 s frames
+        delay = min(250, max(5, int(((i + 1) / self.fps - t) * 1000) + 2))
         return (None if key == last_key else frames[key[1]]), key, delay
 
     def frame_at(self, t):

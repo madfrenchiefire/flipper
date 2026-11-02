@@ -33,10 +33,13 @@ python ishow_app.py --demo     # try it without hardware
   (**Show 120 more** at the end of a section adds the next lot), and a file is only loaded in full
   when you show or preview it. **Remove folder** unlinks it (no files are deleted).
 - **Right-click any icon**: **Preview…** opens a large animated preview without touching the laser,
-  and says how many frames and points the file has and whether it may flicker. Animations get a
-  **Speed** slider; the speed is remembered for that file and used on the laser too (**Default**
-  resets it; iShow `.ilf` animations default to 10 frames/s, other files to the *Laser file
-  speed* setting). Also **Show on
+  and says how many frames and points the file has and whether it may flicker. Multi-frame files get a
+  **Speed** box in **frames per second** or **seconds per frame** (e.g. 30 seconds per frame
+  for Frames files that are really a set of separate pictures), with a frame counter and
+  "next in … s". The speed is remembered for that file and used on the laser too; **Use this
+  speed for the whole folder** sets every file in that folder at once, **Default** resets it
+  (iShow `.ilf` animations default to 10 frames/s, other files to the *Laser file speed*
+  setting). Also **Show on
   laser**, and **Remove** for your own files.
 - **STOP / BLANK** (or **Esc**) turns the beam off. The firmware also blanks the beam by itself if
   the PC stops sending.
