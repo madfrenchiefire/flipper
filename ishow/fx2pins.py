@@ -16,6 +16,7 @@ Commands at the prompt:
     dac a 200      write 200 to DAC channel A (PA1 low), then pulse WR (PA0)
     dac b 50       write 50 to DAC channel B (PA1 high)
     s              show status (pin read-back and heartbeat)
+    m              diagnostics: dump the whole mailbox a few times
     q              release everything and quit
 
 LASER DISCONNECTED. Measure the ILDA socket with a multimeter instead.
@@ -110,6 +111,16 @@ def main():
             try:
                 if cmd == "q":
                     break
+                elif cmd == "m":
+                    for _ in range(3):
+                        mb = bytes(pins.dev.ctrl_transfer(0xC0, 0xA0, MAILBOX, 0, 8))
+                        print(f"  mailbox: OEA={mb[0]:02x} IOA={mb[1]:02x} OED={mb[2]:02x} IOD={mb[3]:02x} "
+                              f"beat={mb[4]:3d} PA={mb[5]:08b} PD={mb[6]:08b}  (we sent "
+                              f"{pins.oea:02x} {pins.ioa:02x} {pins.oed:02x} {pins.iod:02x})")
+                        time.sleep(0.1)
+                    code = bytes(pins.dev.ctrl_transfer(0xC0, 0xA0, 0x0000, 0, 32))
+                    ok = code == read_image(FIRMWARE)[0][1]
+                    print(f"  program in RAM {'matches' if ok else 'DOES NOT match'} pinwiggle.ihx")
                 elif cmd == "s":
                     st = pins.status()
                     print(f"  port A reads {st['port_a']:08b} (PA7..PA0), port D reads "
