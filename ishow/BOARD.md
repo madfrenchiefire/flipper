@@ -139,6 +139,36 @@ while driven low is a read-back quirk, not a wiring fault.)
 
 Colours are on/off: 0 V off, about +4.1 V on.
 
+## The original driver package (xinxiuII.inf, LQloader.sys, Lhloader.sys, ezusb.sys)
+
+The `.inf` (Xinxiu stage equipment, 2010) lists four devices:
+
+| USB ID | Name in the .inf | Driver |
+|---|---|---|
+| 3333:6666 | "Xinxiu Gui22 card" (**this board, blank**) | LQloader.sys (firmware loader) |
+| 9999:6666 | "iShowII Lasershow software interface card" (this board after loading) | ezusb.sys |
+| 3333:5555 | "sek 7 Color USB2.0 GuiCard V20 Loader" (older card) | Lhloader.sys |
+| 9999:5555 | "sek 7 Color USB2.0 GuiCard V20 (Basic)" | ezusb.sys |
+
+All three `.sys` files are 32-bit x86 and unsigned (ezusb.sys 2001, Lhloader 2010, LQloader 2011),
+so they can't load on 64-bit Windows 10/11. That's why the box stopped working.
+
+LQloader.sys is Cypress's "ezloader" sample with the board's firmware embedded (280 Intel-hex records,
+3,415 bytes at 0x0000–0x0DC8, plus the standard 792-byte helper loader). Analysis of that firmware:
+
+- It re-enumerates as **9999:6666, strings "LaserShw" / "USB22-Card"**, with bulk EP2/EP4 OUT and
+  EP6/EP8 IN (512 bytes, 64 at full speed).
+- Its point routine (0x0CFE) is exactly our mapping: `IOD = x; PA1 = 0; pulse PA0; IOD = y; PA1 = 1;
+  pulse PA0`. Its blank routine (0x0D5F) clears PA2–PA5. **This confirms the measured signal map.**
+- Between points it **interpolates on the chip** (Bresenham-style, one DAC step at a time toward the
+  next target), so the PC only sends corner points.
+- Timer 0 is a tick counter; after about 15 ticks without data it calls the blank routine (beam off).
+- Port B is a data bus to the STC with **PA6/PA7 as handshake lines** (routines at 0x0280–0x02E3 and
+  0x06E0–0x07AB). The STC isn't involved in drawing. It most likely handles the RJ45 link or standalone
+  playback.
+
+Our own firmware (`firmware/stream.c`) replaces all of this and runs on Windows 11 with WinUSB.
+
 ## Test firmware note
 
 The first test program (pinwiggle) used the FX2's 0xA0 memory request while the 8051 was running.
