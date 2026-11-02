@@ -115,6 +115,14 @@ should go to STC pin 5 (P3.0/RXD) and pin 7 (P3.1/TXD). Count from the dot, anti
 250000) during or after power-up. One burst at plug-in did not repeat and decoded as noise. The STC's
 program apparently doesn't use its serial port; the header is for factory programming only.
 
+## Test firmware note
+
+The first test program (pinwiggle) used the FX2's 0xA0 memory request while the 8051 was running.
+That doesn't work: reads returned the program's own instruction bytes (bus contention), so writes
+never reached the ports either (0xA0 while running is unreliable). `firmware/pinctl.c` replaces it: commands
+travel over bulk EP2 OUT, status comes back on EP6 IN, using the FX2's built-in default descriptors
+(alt setting 1), so no new USB driver is needed.
+
 ## Multimeter results
 
 Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resistance like `100 Ω`.
