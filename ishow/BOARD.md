@@ -139,15 +139,19 @@ Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resista
 | 1 | gate 1 input A | U1 pin 45 (PA5), via the staircase via nearest the pins on the left |
 | 2 | gate 1 input B | same via as pin 1 (inputs tied together: gate 1 is a buffer) |
 | 3 | gate 1 output | (DB25 pin) |
-| 4 | gate 2 input A | |
-| 5 | gate 2 input B | |
+| 4 | gate 2 input A | U1 pin 44 (PA4), staircase via 2 |
+| 5 | gate 2 input B | same (buffer) |
 | 6 | gate 2 output | (DB25 pin) |
-| 9 | gate 3 input A | |
-| 10 | gate 3 input B | |
+| 9 | gate 3 input A | U1 pin 43 (PA3), staircase via 3 |
+| 10 | gate 3 input B | same (buffer) |
 | 8 | gate 3 output | (DB25 pin) |
-| 12 | gate 4 input A | |
-| 13 | gate 4 input B | |
+| 12 | gate 4 input A | U1 pin 42 (PA2), staircase via 4 |
+| 13 | gate 4 input B | same (buffer) |
 | 11 | gate 4 output | (DB25 pin) |
+
+**Result:** all four 74HC08 gates are buffers (both inputs tied), driven by PA5, PA4, PA3 and PA2. The
+four colour/blanking outputs are controlled directly by the USB chip. Still to find: which DB25 pin each
+output (3, 6, 8, 11) drives, and where PA0/PA1 go (expected: DAC pins 6/15/16).
 
 ### Step 3: USB chip to STC (only if step 1 or 2 shows STC pins)
 | U1 pin | FX2 signal | Goes to U6 pin |
