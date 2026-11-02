@@ -67,10 +67,56 @@ program apparently doesn't use its serial port; the header is for factory progra
 
 ## Multimeter results
 
-| From | To | Result |
+Board unplugged. Record each as `U1 52`, `U6 17`, `G`, `V`, `none`, or a resistance like `100 Ω`.
+
+### Step 0: orientation checks
+| Probe | Expect | Result |
 |---|---|---|
-| DAC 7–14 (DB7–DB0) | U1 52–56, 1–3 (PD0–PD7)? | |
-| DAC 6 (A/B select) | ? | |
-| DAC 15 (CS#) | ? | |
-| DAC 16 (WR#) | ? | |
-| 74HC08 inputs 1, 2, 4, 5, 9, 10, 12, 13 | ? | |
+| U1 pin 4 → ISP G | beep (GND) | |
+| U1 pin 19 → ISP G | beep (GND) | |
+| U1 pins 15, 16 → USB socket | the two middle pins of the USB-B socket | |
+| U4 pin 5 → ISP G | beep (DGND) | |
+| U4 pin 17 → ISP V | beep (+5 V) | |
+| U5 pin 7 → ISP G, pin 14 → ISP V | beep, beep | |
+| ISP R → U6 pin 5, ISP T → U6 pin 7 | beep, beep | |
+
+### Step 1: DAC (U4, TLC7528)
+| U4 pin | Signal | Goes to |
+|---|---|---|
+| 7 | DB7 | |
+| 8 | DB6 | |
+| 9 | DB5 | |
+| 10 | DB4 | |
+| 11 | DB3 | |
+| 12 | DB2 | |
+| 13 | DB1 | |
+| 14 | DB0 | |
+| 6 | DACA/DACB select | |
+| 15 | CS# | |
+| 16 | WR# | |
+
+### Step 2: colour gates (U5, 74HC08)
+| U5 pin | Signal | Goes to |
+|---|---|---|
+| 1 | gate 1 input A | |
+| 2 | gate 1 input B | |
+| 3 | gate 1 output | (DB25 pin) |
+| 4 | gate 2 input A | |
+| 5 | gate 2 input B | |
+| 6 | gate 2 output | (DB25 pin) |
+| 9 | gate 3 input A | |
+| 10 | gate 3 input B | |
+| 8 | gate 3 output | (DB25 pin) |
+| 12 | gate 4 input A | |
+| 13 | gate 4 input B | |
+| 11 | gate 4 output | (DB25 pin) |
+
+### Step 3: USB chip to STC (only if step 1 or 2 shows STC pins)
+| U1 pin | FX2 signal | Goes to U6 pin |
+|---|---|---|
+| 25–32 | PB0–PB7 | |
+| 36, 37, 38 | CTL0–CTL2 | |
+| 40–47 | PA0–PA7 | |
+| 8, 9 | RDY0, RDY1 | |
+| 5 | CLKOUT | |
+| 20 | IFCLK | |
