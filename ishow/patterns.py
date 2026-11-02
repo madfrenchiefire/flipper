@@ -156,6 +156,23 @@ class LibraryItem:
             self.frames = frames
         return self
 
+    def frame_due(self, t, last_key=None):
+        """For previews: (points or None if unchanged since last_key, key, ms until the next change).
+        Redrawing exactly when the frame changes (not on a fixed timer) keeps animations smooth."""
+        if self.generator:
+            return self.generator(t), None, 33
+        frames = self.frames
+        if frames is None:
+            key = ("first", id(self))
+            return (None if key == last_key else self.first or [Point(0, 0)]), key, 100
+        if len(frames) == 1:
+            key = (id(frames), 0)
+            return (None if key == last_key else frames[0]), key, 200
+        i = int(t * self.fps)
+        key = (id(frames), i % len(frames))
+        delay = max(5, int(((i + 1) / self.fps - t) * 1000) + 2)
+        return (None if key == last_key else frames[key[1]]), key, delay
+
     def frame_at(self, t):
         if self.generator:
             return self.generator(t)
@@ -253,6 +270,19 @@ def ilda_item(path, lazy=False):
     if not frames:
         raise ValueError("no frames in file")
     return LibraryItem(name, frames=frames, fps=20, path=path, kind="file")
+
+
+def preview_polylines(points, max_points=1500):
+    """Lit parts of a point list joined into polylines: [[x0, y0, x1, y1, ...], ...].
+    One canvas item per stroke instead of one per segment is far quicker to draw."""
+    lines, cur, last = [], None, None
+    for x0, y0, x1, y1 in preview_segments(points, max_points):
+        if (x0, y0) != last:
+            cur = [x0, y0]
+            lines.append(cur)
+        cur += [x1, y1]
+        last = (x1, y1)
+    return lines
 
 
 def preview_segments(points, max_points=1500):

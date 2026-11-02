@@ -10,6 +10,7 @@ pattern, your own text or an imported .ild laser file shows it on the
 laser. STOP (or the Esc key) blanks the beam.
 """
 import argparse
+import collections
 import json
 import subprocess
 import os
@@ -36,7 +37,7 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "ishow_app_settings.json")
 
 DEFAULT_SETTINGS = {"rate": 20, "limit": 5.0, "invert_x": False, "invert_y": False,
                     "swap_xy": False, "mono_green": True, "file_fps": 20, "line_step": 3,
-                    "folders": [], "removed_folders": []}
+                    "folders": [], "removed_folders": [], "file_speeds": {}}
 
 # Where the original iShow II content can be: first the project's own copy (ishow_content, next to
 # this app or the .exe), then an unpacked or installed iShow II. Found folders are linked automatically.
@@ -73,6 +74,8 @@ def folder_title(folder):
 
 
 COLLAPSE_ABOVE = 500   # sections with more files than this start collapsed (Drawing: 2,629)
+PAGE = 120             # preview icons made per "Show more" click: thousands of icons make Tk crawl
+ILF_FPS = 10           # default speed of iShow .ilf animations (most have only 2-12 frames)
 
 BG, PANEL, BEAM = "#15171c", "#1f232b", "#39ff6a"
 PREVIEW = 205   # size of the "Now showing" preview, in pixels
@@ -179,13 +182,16 @@ class LaserWorker(threading.Thread):
 # ----------------------------------------------------------------------------
 # GUI pieces
 # ----------------------------------------------------------------------------
-def draw_points(canvas, points, size, pad=4, width=1, max_points=1500):
+def draw_points(canvas, points, size, pad=4, width=1, max_points=1500, polylines=None):
+    """Draw a frame. polylines: already made by patterns.preview_polylines (e.g. in a thread)."""
     canvas.delete("all")
     span = size - 2 * pad
-    for x0, y0, x1, y1 in patterns.preview_segments(points, max_points):
-        canvas.create_line(pad + (x0 + 1) / 2 * span, pad + (1 - y0) / 2 * span,
-                           pad + (x1 + 1) / 2 * span, pad + (1 - y1) / 2 * span,
-                           fill=BEAM, width=width, capstyle="round")
+    if polylines is None:
+        polylines = patterns.preview_polylines(points, max_points)
+    for line in polylines:
+        xy = [pad + (v + 1) / 2 * span if k % 2 == 0 else pad + (1 - v) / 2 * span
+              for k, v in enumerate(line)]
+        canvas.create_line(*xy, fill=BEAM, width=width, capstyle="round", joinstyle="round")
 
 
 class Light(tk.Frame):
@@ -210,7 +216,9 @@ class Tile(tk.Frame):
                                 highlightthickness=0, cursor="hand2")
         self.canvas.pack(padx=4, pady=(4, 0))
         try:
-            draw_points(self.canvas, item.preview_frame(), self.SIZE, max_points=600)
+            icon = getattr(item, "icon", None)    # made by the loader thread for folder files
+            draw_points(self.canvas, None if icon else item.preview_frame(), self.SIZE,
+                        max_points=600, polylines=icon)
         except Exception:  # noqa: BLE001 - a broken file still gets a tile
             self.canvas.create_text(self.SIZE / 2, self.SIZE / 2, text="?", fill="red")
         self.label = tk.Label(self, text=item.name, bg=PANEL, fg="#d8dde6", wraplength=self.SIZE,
@@ -241,6 +249,9 @@ class PreviewWindow(tk.Toplevel):
                  justify="left", wraplength=self.SIZE).pack(anchor="w", padx=10)
         buttons = tk.Frame(self, bg=PANEL)
         buttons.pack(fill="x", padx=10, pady=10)
+        self.buttons = buttons
+        self.speed_row = None
+        self.last_key = None
         ttk.Button(buttons, text="Show on laser", command=self._show).pack(side="left")
         ttk.Button(buttons, text="Close", command=self.close).pack(side="right")
         self.protocol("WM_DELETE_WINDOW", self.close)
@@ -262,8 +273,13 @@ class PreviewWindow(tk.Toplevel):
         if not self.winfo_exists():
             return
         item = self.item
-        pts = item.frame_at(time.monotonic() - self.t0)
+        pts, self.last_key, delay = item.frame_due(time.monotonic() - self.t0, self.last_key)
+        self.after(delay, self._tick)
+        if pts is None:          # same frame as last time: nothing to redraw
+            return
         draw_points(self.canvas, pts, self.SIZE, pad=10, width=2, max_points=4000)
+        if item.loaded and item.frames and len(item.frames) > 1 and self.speed_row is None:
+            self._add_speed_row()
         if self.load_error:
             self.info.set(f"Couldn't read the whole file: {self.load_error}")
         elif item.loaded:
@@ -283,7 +299,37 @@ class PreviewWindow(tk.Toplevel):
             else:
                 lines.append(f"{len(pts)} corner points; the box's chip draws the lines between them")
             self.info.set("\n".join(lines))
-        self.after(50, self._tick)
+
+    def _add_speed_row(self):
+        """A speed slider for multi-frame files, remembered per file (also used on the laser)."""
+        row = tk.Frame(self, bg=PANEL)
+        row.pack(fill="x", padx=10, before=self.buttons)
+        tk.Label(row, text="Speed", bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9)).pack(side="left")
+        self.speed_var = tk.IntVar(value=int(self.item.fps))
+        value = tk.Label(row, width=12, anchor="w", bg=PANEL, fg="#d8dde6", font=("Segoe UI", 9))
+
+        def changed(_=None):
+            fps = max(1, int(float(self.speed_var.get())))
+            if fps != self.item.fps:
+                # keep the animation where it is instead of jumping to another frame
+                now = time.monotonic()
+                self.t0 = now - (now - self.t0) * self.item.fps / fps
+                self.item.fps = fps
+                self.last_key = None
+            value.config(text=f"{fps} frames/s")
+        scale = ttk.Scale(row, from_=1, to=40, variable=self.speed_var, command=changed, length=230)
+        scale.pack(side="left", padx=8)
+        scale.bind("<ButtonRelease-1>", lambda e: self._save_speed())
+        value.pack(side="left")
+        ttk.Button(row, text="Default", command=lambda: (self.speed_var.set(self.app.default_fps(self.item.path)),
+                                                         changed(), self._save_speed(reset=True))
+                   ).pack(side="right")
+        changed()
+        self.speed_row = row
+
+    def _save_speed(self, reset=False):
+        if self.item.path and self.winfo_exists():
+            self.app.set_file_speed(self.item.path, None if reset else self.item.fps)
 
     def _show(self):
         self.app.play(self.item)
@@ -324,6 +370,7 @@ class App:
         self.last_reply = 0.0
         self.current = None
         self.current_t0 = time.monotonic()
+        self.preview_key = None
         self.tiles = []
         self.file_tiles = []
 
@@ -452,7 +499,11 @@ class App:
         self.empty_files = tk.Label(self.sec_files, text="No laser files yet. Use “Add laser files”.",
                                     bg=BG, fg="#8b93a1", font=("Segoe UI", 9))
         self.folder_sections = {}
-        self.pending_tiles = []
+        self.parse_q = queue.Queue()
+        self.ready_tiles = collections.deque()
+        self.tiles_waiting = 0
+        threading.Thread(target=self._parse_loop, daemon=True).start()
+        self.root.after(30, self._drain_tiles)
         self._load_library_files()
         self._auto_link_ishow()
         for folder in list(self.settings["folders"]):
@@ -505,9 +556,23 @@ class App:
                     self.log(f"Skipped {name}: {e}")
         self._relayout_files()
 
+    def default_fps(self, path):
+        return ILF_FPS if path and path.lower().endswith(".ilf") else self.settings["file_fps"]
+
+    def fps_for(self, path):
+        return self.settings["file_speeds"].get(path) or self.default_fps(path)
+
+    def set_file_speed(self, path, fps):
+        speeds = self.settings["file_speeds"]
+        if fps is None or fps == self.default_fps(path):
+            speeds.pop(path, None)
+        else:
+            speeds[path] = int(fps)
+        self._save_settings()
+
     def _add_file_item(self, path):
         item = patterns.file_item(path, lazy=True)
-        item.fps = self.settings["file_fps"]
+        item.fps = self.fps_for(path)
         self._add_tile(self.sec_files, item, removable=True)
 
     # -- linked folders (e.g. iShow's ILDAimage folder): files stay where they are ----------
@@ -556,6 +621,9 @@ class App:
             title += " – not found"
         sec = self._section(title, on_remove=lambda f=folder: self.remove_folder(f))
         sec.paths = [os.path.join(folder, n) for n in names]
+        sec.requested = 0          # how many of sec.paths have been sent to the loader
+        sec.dead = False
+        sec.more = ttk.Button(sec, command=lambda s=sec: self._request_page(s))
         sec.shown = len(names) <= COLLAPSE_ABOVE
         sec.toggle = ttk.Button(sec.head, command=lambda s=sec: self._toggle_section(s))
         sec.toggle.pack(side="right", padx=6)
@@ -564,10 +632,10 @@ class App:
 
     def _show_section(self, sec, show):
         sec.shown = show
-        sec.toggle.config(text="Hide" if show else f"Show all {len(sec.paths)}")
+        sec.toggle.config(text="Hide" if show else f"Show ({len(sec.paths)})")
         if show:
-            if not sec.tiles:
-                self._queue_tiles(sec)
+            if not sec.requested:
+                self._request_page(sec)
             sec.pack(fill="x", after=sec.head)
         else:
             sec.pack_forget()
@@ -575,31 +643,54 @@ class App:
     def _toggle_section(self, sec):
         self._show_section(sec, not sec.shown)
 
-    def _queue_tiles(self, sec):
-        start = not self.pending_tiles
-        self.pending_tiles += [(sec, p) for p in sec.paths]
-        if start and self.pending_tiles:
-            self.root.after(10, self._build_pending_tiles)
+    def _request_page(self, sec):
+        """Queue the next PAGE files of a section for the background loader."""
+        start, sec.requested = sec.requested, min(len(sec.paths), sec.requested + PAGE)
+        for path in sec.paths[start:sec.requested]:
+            self.tiles_waiting += 1
+            self.parse_q.put((sec, path))
+        left = len(sec.paths) - sec.requested
+        if left:
+            sec.more.config(text=f"Show {min(PAGE, left)} more  ({left:,} not shown yet)")
+            sec.more.grid(row=len(sec.paths) // 6 + 1, column=0, columnspan=6, sticky="w", padx=4, pady=(4, 8))
+        else:
+            sec.more.grid_forget()
 
-    def _build_pending_tiles(self):
-        """Make preview icons a few at a time so the window stays responsive."""
-        for _ in range(8):
-            if not self.pending_tiles:
-                break
-            sec, path = self.pending_tiles.pop(0)
-            if not sec.winfo_exists():
+    def _parse_loop(self):
+        """Background thread: reads each file's first frame and works out its icon, so the window
+        never waits on the disk. Tk widgets are only made on the main thread (_drain_tiles)."""
+        while True:
+            sec, path = self.parse_q.get()
+            if sec.dead:
+                self.ready_tiles.append((sec, path, None, None))
                 continue
             try:
                 item = patterns.file_item(path, lazy=True)
-                item.fps = self.settings["file_fps"]
-                self._add_tile(sec, item)
+                item.icon = patterns.preview_polylines(item.first, 600)
+                self.ready_tiles.append((sec, path, item, None))
             except Exception as e:  # noqa: BLE001 - a bad file shouldn't stop the rest
-                self.log(f"Skipped {os.path.basename(path)}: {e}")
-        if self.pending_tiles:
-            self.log(f"Loading previews… {len(self.pending_tiles)} to go")
-            self.root.after(1, self._build_pending_tiles)
-        else:
-            self.log("Library ready.")
+                self.ready_tiles.append((sec, path, None, str(e)))
+
+    def _drain_tiles(self):
+        """Make the icons the loader has finished, for at most ~30 ms at a time, so the window
+        keeps responding while a big folder fills in."""
+        end = time.perf_counter() + 0.03
+        made = False
+        while self.ready_tiles and time.perf_counter() < end:
+            sec, path, item, err = self.ready_tiles.popleft()
+            self.tiles_waiting -= 1
+            made = True
+            if sec.dead:
+                continue
+            if err:
+                self.log(f"Skipped {os.path.basename(path)}: {err}")
+                continue
+            item.fps = self.fps_for(path)
+            self._add_tile(sec, item)
+        if made:
+            self.log(f"Loading previews… {self.tiles_waiting:,} to go" if self.tiles_waiting
+                     else "Library ready.")
+        self.root.after(15 if self.ready_tiles else 60, self._drain_tiles)
 
     def remove_folder(self, folder):
         if not messagebox.askyesno(APP_NAME, f"Remove the folder “{folder}” from your library?\n\n"
@@ -611,8 +702,8 @@ class App:
         if folder not in self.settings["removed_folders"]:
             self.settings["removed_folders"].append(folder)
         self._save_settings()
-        self.pending_tiles = [(s, p) for s, p in self.pending_tiles if s is not sec]
         if sec is not None:
+            sec.dead = True        # the loader skips the rest of its files
             if self.current is not None and any(t.item is self.current for t in sec.tiles):
                 self.stop()
             for t in sec.tiles:
@@ -684,6 +775,7 @@ class App:
         previous = self.current
         self.current = item
         self.current_t0 = time.monotonic()
+        self.preview_key = None
         self.now_var.set(item.name)
         if previous is not None and previous is not item and previous.kind == "file" and previous.path:
             previous.frames = None          # free the memory of the file we're leaving
@@ -787,9 +879,12 @@ class App:
                                                  "overdrive the laser's mirrors.\n\nUse it anyway?"):
                 self.var_limit.set(self.settings["limit"])
                 return
+        s["folders"], s["removed_folders"] = self.settings["folders"], self.settings["removed_folders"]
+        s["file_speeds"] = self.settings["file_speeds"]
         self.settings = s
-        for t in self.file_tiles:
-            t.item.fps = s["file_fps"]
+        for t in self.tiles:
+            if t.item.path:
+                t.item.fps = self.fps_for(t.item.path)
         self._save_settings()
         if send:
             self.worker.cmds.put(("settings", dict(s)))
@@ -879,13 +974,16 @@ class App:
         self.log(msg)
 
     def _animate_preview(self):
+        delay = 100
         if self.current is not None:
             try:
-                pts = self.current.frame_at(time.monotonic() - self.current_t0)
-                draw_points(self.preview, pts, PREVIEW, pad=8, width=2)
+                pts, self.preview_key, delay = self.current.frame_due(
+                    time.monotonic() - self.current_t0, self.preview_key)
+                if pts is not None:
+                    draw_points(self.preview, pts, PREVIEW, pad=8, width=2)
             except Exception:  # noqa: BLE001
-                pass
-        self.root.after(60, self._animate_preview)
+                delay = 100
+        self.root.after(delay, self._animate_preview)
 
     # -- settings file -----------------------------------------------------------
     def _load_settings(self):

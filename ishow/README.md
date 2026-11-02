@@ -23,13 +23,17 @@ python ishow_app.py --demo     # try it without hardware
 - **Add laser files (.ild)**: imported files get a preview icon and are kept in `laser_files/`.
 - **Original iShow II content** (in `ishow_content/`) is added to the library automatically, as
   sections: Quickframe A/B/C and Frames (iShow's `.ilf` animations), ILDA images (476 `.ild`
-  files) and Drawings (2,629 `.ddr` pictures, collapsed until you click **Show all**). An unpacked
+  files) and Drawings (2,629 `.ddr` pictures, collapsed until you click **Show**). An unpacked
   `C:\iShowII_EN` is found too. **Add laser files** also accepts `.ilf` and `.ddr`.
 - **Add folder…**: link a whole folder of `.ild` files, for example iShow II's `ILDAimage` folder
-  (476 files). The files stay where they are. Icons appear a few at a time, and a file is only
-  loaded in full when you show or preview it. **Remove folder** unlinks it (no files are deleted).
+  (476 files). The files stay where they are. Icons are made in the background, 120 at a time
+  (**Show 120 more** at the end of a section adds the next lot), and a file is only loaded in full
+  when you show or preview it. **Remove folder** unlinks it (no files are deleted).
 - **Right-click any icon**: **Preview…** opens a large animated preview without touching the laser,
-  and says how many frames and points the file has and whether it may flicker. Also **Show on
+  and says how many frames and points the file has and whether it may flicker. Animations get a
+  **Speed** slider; the speed is remembered for that file and used on the laser too (**Default**
+  resets it; iShow `.ilf` animations default to 10 frames/s, other files to the *Laser file
+  speed* setting). Also **Show on
   laser**, and **Remove** for your own files.
 - **STOP / BLANK** (or **Esc**) turns the beam off. The firmware also blanks the beam by itself if
   the PC stops sending.
