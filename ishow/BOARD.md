@@ -87,6 +87,18 @@ Positions are mirrored from the top side. Two bundles of traces stand out:
 - DAC pin 6's via couldn't be followed at this resolution. Where DAC pins 6, 15 and 16 end up (U1 or
   U6) is now the deciding question.
 
+### STC90C52RC (U6) orientation and the PB link
+
+Standard 44-pin 8051 layout: 1–3 P1.5–P1.7, 4 RST, 5 P3.0/RXD, 7 P3.1/TXD, 14/15 XTAL, 16 GND,
+18–25 P2.0–P2.7, 30–37 P0.7–P0.0, 38 VCC, 40–44 P1.0–P1.4. On this board, pins 34–44 face U1 (pin 34
+at the top, 44 at the bottom), pins 1–11 face the ISP header (pin 1 at the dot corner), and pins 12–22
+face the X2 crystal. Checks: the wide power trace lands on pin 38 (VCC), the crystal sits on the
+XTAL side, and RXD/TXD sit on the side nearest the ISP header.
+
+U1's PB0–PB3 (pins 25–28) run straight to STC pins 40–43 = **P1.0–P1.3**, in order (pin 28 to the
+lowest trace). 8051 port 1 has internal pull-ups, which explains why port B read steady high in
+PulseView. So FX2 port B ↔ STC port 1 is an 8-bit link, most likely PB4–PB7 ↔ P1.4–P1.7.
+
 ## ISP header (STC90C52RC programming / serial port)
 
 4-pin header labelled `ISP`, pins **V R T G**: +5 V, RXD (STC serial input), TXD (STC serial
@@ -156,8 +168,11 @@ output (3, 6, 8, 11) drives, and where PA0/PA1 go (expected: DAC pins 6/15/16).
 ### Step 3: USB chip to STC (only if step 1 or 2 shows STC pins)
 | U1 pin | FX2 signal | Goes to U6 pin |
 |---|---|---|
-| 25–28 | PB0–PB3 | four traces straight to the lower four pins on the STC's side facing U1 (top layer) |
-| 29–32 | PB4–PB7 | (probably the rest of the same bus; not yet checked) |
+| 25 | PB0 | STC pin 40 (P1.0) |
+| 26 | PB1 | STC pin 41 (P1.1) |
+| 27 | PB2 | STC pin 42 (P1.2) |
+| 28 | PB3 | STC pin 43 (P1.3) |
+| 29–32 | PB4–PB7 | expected STC pins 44, 1, 2, 3 (P1.4–P1.7); not yet checked |
 | 36, 37, 38 | CTL0–CTL2 | |
 | 40–47 | PA0–PA7 | |
 | 8, 9 | RDY0, RDY1 | |
