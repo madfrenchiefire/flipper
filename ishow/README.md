@@ -1,5 +1,33 @@
 # Controlling an iShow 2.3 laser box from Python
 
+## Quick start: driving the box directly (works on Windows 11)
+
+The original iShow driver and firmware are lost, so this project loads **its own firmware** into
+the box's Cypress FX2 chip over USB and streams points to it. Nothing on the box is changed
+permanently: unplugging it clears our firmware.
+
+1. `python -m pip install pyusb libusb-package`
+2. Zadig → Options → List All Devices → **Unknown device (3333 6666)** → **WinUSB** → Install Driver.
+3. Laser **disconnected** first, then check the output with a multimeter (DB25 pin 1 = X, pin 2 = Y,
+   pin 25 = ground):
+   `python ishow_usb.py --test-range` (blanked corner tour; X/Y should reach about ±5 V).
+4. Then, with the laser at low power: `python ishow_usb.py --shape circle --seconds 10`
+
+```python
+from ishow_usb import IShowUSB
+from ishow_dac import Point
+
+with IShowUSB() as dac:          # limit=5.0 keeps X/Y within the ILDA ±5 V
+    while True:
+        dac.send_frame([Point(-0.5, 0, r=1), Point(0.5, 0, r=1)])
+```
+
+Board facts (see `BOARD.md`): 8-bit X/Y, colours on/off (7 colours), X/Y full scale about ±8.3 V,
+so the driver limits it to ±5 V by default. The firmware blanks the beam whenever the PC stops
+sending points.
+
+---
+
 ## What IS.exe revealed (read this first)
 
 Decompiling iShow 2.3's `IS.exe` showed that **the software never talks USB**.
@@ -74,6 +102,7 @@ are the route for this USB board. The data format above is still the best guess 
 | `ishow_net.py` | **The decoded iShow 2.3 protocol** (TCP 192.168.1.172:4000) |
 | `fake_box.py` | Simulated box for testing `ishow_net.py` without hardware |
 | `fx2load.py` | Loads a program into the box's FX2 chip (RAM only; unplugging undoes it) |
+| `ishow_usb.py` + `firmware/stream.c` | **The working driver**: streams points to the box with our own FX2 firmware |
 | `fx2pins.py` + `firmware/pinctl.c` | Loads a small test program into the FX2 and lets you drive the DAC and port A/D pins by hand over USB |
 | `serial_listen.py` | Listens (read-only) to the STC chip's serial output on the ISP header |
 | `ilda.py` | Reads `.ild` files (formats 0, 1, 2, 4, 5) |
