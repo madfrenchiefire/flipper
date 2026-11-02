@@ -61,6 +61,10 @@ The header sits next to the STC and its own 24 MHz crystal (X2_B). The silkscree
 "STC89C52"; the fitted part is the pin-compatible STC90C52RC. On the 44-pin package, R and T
 should go to STC pin 5 (P3.0/RXD) and pin 7 (P3.1/TXD). Count from the dot, anticlockwise.
 
+**Listening result:** with `serial_listen.py`, nothing was received at any likely speed (1200–57600,
+250000) during or after power-up. One burst at plug-in did not repeat and decoded as noise. The STC's
+program apparently doesn't use its serial port; the header is for factory programming only.
+
 ## Multimeter results
 
 | From | To | Result |
