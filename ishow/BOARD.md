@@ -49,6 +49,19 @@ corner pin on the DAC side, nearest the DAC. The crystal (pins 11/12), USB (15/1
 - So the hypothesis is that **the DAC data bus is FX2 port D**, driven directly by the USB chip.
 - The lower pins on U1's DAC side (PB, CTL, PA region) go into vias, probably to the STC90C52RC.
 
+### Microscope photos (top layer, confirmed visually)
+
+- **DAC pins 7, 8, 9** (DB7–DB5): three traces leave the DAC's left side, run over the top of U1 and
+  curve down into **U1's top pins on the crystal side (pins 1–3 = PD5–PD7)**.
+- **DAC pin 10** (DB4): runs left and down to **U1's top pin on the DAC side (pin 56 = PD4)**.
+- **DAC pins 11–14** (DB3–DB0): leave the DAC's right side, curve down around the DAC's corner and
+  run left as a bus into **U1's top pins on the DAC side (pins 52–55 = PD0–PD3)**.
+- So the **whole 8-bit DAC data bus is FX2 port D**, with no STC in between. The exact bit order
+  still needs the multimeter, but firmware can remap any order, so it doesn't change the plan.
+- **DAC pin 6** (A/B select) goes straight into a via, to the back of the board. Pins 15/16 (CS#,
+  WR#) aren't clear in the photos. The rest of U1's DAC side (port A, CTL) also goes into vias. The
+  back side of the board will show where those go.
+
 ## ISP header (STC90C52RC programming / serial port)
 
 4-pin header labelled `ISP`, pins **V R T G**: +5 V, RXD (STC serial input), TXD (STC serial
