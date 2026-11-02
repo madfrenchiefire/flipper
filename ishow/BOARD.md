@@ -125,6 +125,20 @@ DAC and the output stage works. Gain ≈ 0.064 V per step, centred on 128. That'
 **channel B = Y (DB25 pin 2)**, and the A/B select on PA1 works. (The status read-back showing PA1 = 1
 while driven low is a read-back quirk, not a wiring fault.)
 
+## Complete signal map (all measured)
+
+| Signal | FX2 pin | ILDA DB25 pin |
+|---|---|---|
+| X (DAC channel A, ±8.3 V full scale) | port D + PA1 = 0 + WR# pulse on PA0 | 1 |
+| Y (DAC channel B, ±8.5 V full scale) | port D + PA1 = 1 + WR# pulse on PA0 | 2 |
+| Intensity / blanking | PA5 | 3 |
+| Red | PA4 | 5 |
+| Green | PA3 | 6 |
+| Blue | PA2 | 7 |
+| Ground | | 25 |
+
+Colours are on/off: 0 V off, about +4.1 V on.
+
 ## Test firmware note
 
 The first test program (pinwiggle) used the FX2's 0xA0 memory request while the 8051 was running.
@@ -177,7 +191,7 @@ CS# permanently enabled. Writing a value: set port D and PA1, pulse PA0 low then
 | 6 | gate 2 output | DB25 pin 5 (ILDA red), driven by PA4 |
 | 9 | gate 3 input A | U1 pin 43 (PA3), staircase via 3 |
 | 10 | gate 3 input B | same (buffer) |
-| 8 | gate 3 output | DB25 pin 6 (ILDA green), driven by PA3 (by elimination; not yet measured) |
+| 8 | gate 3 output | DB25 pin 6 (ILDA green), driven by PA3 |
 | 12 | gate 4 input A | U1 pin 42 (PA2), staircase via 4 |
 | 13 | gate 4 input B | same (buffer) |
 | 11 | gate 4 output | DB25 pin 7 (ILDA blue), driven by PA2 |
