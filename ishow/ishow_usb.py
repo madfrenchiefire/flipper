@@ -130,7 +130,7 @@ def corner_tour():
     """Slow, blanked tour of the corners and centre, for checking the output range."""
     pts = []
     for x, y in [(0, 0), (-1, -1), (1, -1), (1, 1), (-1, 1), (0, 0)]:
-        pts += [Point(x, y)] * 2000   # about 0.1 s per corner at 20 kpps
+        pts += [Point(x, y)] * 30000  # about 1.5 s per corner at 20 kpps (readable on a meter)
     return pts
 
 
